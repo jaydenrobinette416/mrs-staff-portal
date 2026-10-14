@@ -25,7 +25,7 @@ async function getDatabase() {
 module.exports = async function handler(req, res) {
   res.setHeader(
     "Access-Control-Allow-Origin",
-    "https://mrs-staff-portal.vercel.app"
+    "https://portal.maidenrescuesquad.org"
   );
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
