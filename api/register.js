@@ -45,11 +45,11 @@ module.exports = async function handler(req, res) {
 
   try {
     const name = String(req.body?.name || "").trim();
-    const username = String(req.body?.username || "").trim();
+    const username = String(req.body?.username || "")
+      .trim()
+      .toLowerCase();
     const password = String(req.body?.password || "");
-    const confirmPassword = String(
-      req.body?.confirmPassword || ""
-    );
+    const confirmPassword = String(req.body?.confirmPassword || "");
 
     if (!name || !username || !password || !confirmPassword) {
       return res.status(400).json({
@@ -58,14 +58,14 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (name.length > 100 || username.length > 50) {
+    if (name.length > 100) {
       return res.status(400).json({
         ok: false,
-        message: "Name or username is too long."
+        message: "Name must be 100 characters or fewer."
       });
     }
 
-    if (!/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
+    if (!/^[a-z0-9._-]{3,50}$/.test(username)) {
       return res.status(400).json({
         ok: false,
         message:
@@ -90,19 +90,6 @@ module.exports = async function handler(req, res) {
     const db = await getDatabase();
     const users = db.collection("users");
 
-    const existing = await users.findOne({
-      username: { $regex: "^" + username.replace(
-        /[.*+?^${}()|[\]\\]/g, "\\$&"
-      ) + "$", $options: "i" }
-    });
-
-    if (existing) {
-      return res.status(409).json({
-        ok: false,
-        message: "That username is already taken."
-      });
-    }
-
     const passwordSalt = crypto.randomBytes(16).toString("hex");
     const passwordHash = (
       await scrypt(password, passwordSalt, 64)
@@ -126,6 +113,13 @@ module.exports = async function handler(req, res) {
         "Registration submitted. An administrator must approve your account before you can sign in."
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        ok: false,
+        message: "That username is already taken."
+      });
+    }
+
     console.error("Registration failed:", error.message);
 
     return res.status(500).json({
