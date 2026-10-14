@@ -3,276 +3,263 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#10243a">
-  <title>Staff Portal | Maiden Rescue Squad</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#12294a">
+  <title>Maiden Rescue Squad | Staff Portal</title>
   <style>
     :root {
-      color-scheme: light;
-      --navy: #10243a;
-      --navy-light: #193853;
-      --red: #b3262d;
-      --background: #f2f5f8;
-      --text: #1c2937;
-      --muted: #64748b;
-      --border: #dce3eb;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #17243b;
+      background: #eef2f7;
     }
 
     * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Arial, Helvetica, sans-serif;
-      color: var(--text);
-      background: var(--background);
-      display: flex;
-      flex-direction: column;
-    }
+    body { margin: 0; }
 
     header {
-      background: var(--navy);
+      background: #12294a;
       color: white;
-      padding: 22px 20px;
-      border-bottom: 4px solid var(--red);
+      padding: 22px 5vw;
     }
 
-    .header-inner {
-      max-width: 1050px;
-      margin: auto;
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-
-    .logo {
-      width: 52px;
-      height: 52px;
-      border: 2px solid #ffffff65;
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      font-size: 25px;
-      flex-shrink: 0;
-    }
-
-    header h1 {
-      font-size: 19px;
-      margin: 0 0 5px;
-      letter-spacing: .3px;
-    }
-
-    header p {
-      margin: 0;
-      font-size: 13px;
-      color: #d2dce7;
-    }
+    header h1 { margin: 0; font-size: 24px; }
+    header p { margin: 6px 0 0; color: #cdd8e8; }
 
     main {
-      width: 100%;
-      max-width: 1050px;
-      margin: auto;
-      padding: 45px 20px;
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      max-width: 1100px;
+      margin: 28px auto;
+      padding: 0 18px;
     }
 
     .card {
-      width: 100%;
-      max-width: 430px;
       background: white;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 32px;
-      box-shadow: 0 12px 35px #10243a0d;
+      border-radius: 13px;
+      box-shadow: 0 5px 20px #14284a13;
+      padding: 24px;
+      margin-bottom: 18px;
     }
 
-    .eyebrow {
-      color: var(--red);
-      text-transform: uppercase;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 1.5px;
-      margin: 0 0 10px;
-    }
+    .auth-wrap { max-width: 560px; margin: 35px auto; }
 
-    h2 {
-      color: var(--navy);
-      font-size: 26px;
-      margin: 0 0 10px;
-    }
-
-    .description {
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.6;
-      margin: 0 0 26px;
-    }
-
-    label {
-      display: block;
-      font-size: 13px;
-      font-weight: 700;
-      margin: 18px 0 8px;
-    }
-
-    input {
-      width: 100%;
-      padding: 13px 14px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      background: #fff;
-      color: var(--text);
-      font-size: 15px;
-      outline: none;
-    }
-
-    input:focus {
-      border-color: #315f87;
-      box-shadow: 0 0 0 3px #315f8718;
+    .tabs, .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
     }
 
     button {
-      width: 100%;
-      margin-top: 23px;
-      padding: 14px;
-      background: var(--navy);
-      color: white;
+      cursor: pointer;
+      background: #1d477a;
       border: 0;
       border-radius: 8px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    button:hover { background: var(--navy-light); }
-    button:disabled { opacity: .65; cursor: wait; }
-
-    .message {
-      display: none;
-      padding: 12px;
-      margin-top: 18px;
-      border-radius: 8px;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .message.error {
-      display: block;
-      color: #8b2027;
-      background: #fff0f0;
-      border: 1px solid #f2caca;
-    }
-
-    .message.success {
-      display: block;
-      color: #17603a;
-      background: #edfaf2;
-      border: 1px solid #c4ead2;
-    }
-
-    .account {
-      display: none;
-      margin-top: 24px;
-      border-top: 1px solid var(--border);
-      padding-top: 20px;
-    }
-
-    .account h3 {
-      margin: 0 0 14px;
-      color: var(--navy);
-    }
-
-    .account p {
+      color: white;
+      padding: 11px 16px;
+      font-weight: 600;
+      font: inherit;
       font-size: 14px;
-      margin: 10px 0;
-      overflow-wrap: anywhere;
     }
 
-    .note {
-      color: var(--muted);
-      font-size: 12px;
+    button.secondary {
+      background: #e8eef7;
+      color: #16345b;
+    }
+
+    button:disabled { opacity: .5; cursor: wait; }
+
+    input {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #bdc9d8;
+      border-radius: 7px;
+      margin: 7px 0 14px;
+      font: inherit;
+      background: white;
+    }
+
+    input:focus {
+      outline: 2px solid #7298c9;
+      outline-offset: 1px;
+    }
+
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    h2 { margin-top: 0; }
+    h3 { margin: 0 0 8px; }
+
+    .hidden { display: none !important; }
+    .muted { color: #657387; }
+
+    .notice {
+      padding: 12px 14px;
+      background: #e7f0fa;
+      border-radius: 8px;
+      margin: 15px 0;
+      white-space: pre-wrap;
       line-height: 1.5;
-      margin-top: 22px;
+    }
+
+    .error { background: #ffe8e8; color: #82212b; }
+    .success { background: #e5f5eb; color: #17603a; }
+
+    .account-row {
+      border-top: 1px solid #e2e7ee;
+      padding: 12px 0;
+      overflow-wrap: anywhere;
     }
 
     footer {
       text-align: center;
-      color: var(--muted);
+      color: #657387;
       font-size: 12px;
       padding: 20px;
     }
 
-    @media (max-width: 480px) {
-      main { padding: 25px 15px; }
-      .card { padding: 25px 21px; }
-      header h1 { font-size: 16px; }
+    @media (max-width: 650px) {
+      header h1 { font-size: 20px; }
+      .card { padding: 17px; }
+      .auth-wrap { margin: 20px auto; }
+      .tabs button { flex: 1; }
     }
   </style>
 </head>
+
 <body>
   <header>
-    <div class="header-inner">
-      <div class="logo" aria-hidden="true">✚</div>
-      <div>
-        <h1>MAIDEN RESCUE SQUAD</h1>
-        <p>Staff Portal</p>
-      </div>
-    </div>
+    <h1>MAIDEN RESCUE SQUAD</h1>
+    <p>Part-Time Staff Portal</p>
   </header>
 
   <main>
-    <section class="card">
-      <p class="eyebrow">Member Access</p>
-      <h2>Staff Sign In</h2>
-      <p class="description">
-        Sign in using your existing Apparatus Check username and password.
-      </p>
+    <div id="auth" class="auth-wrap">
+      <div class="tabs">
+        <button class="secondary" id="loginTab" type="button">
+          Staff Login
+        </button>
+        <button class="secondary" id="registerTab" type="button">
+          Create Account
+        </button>
+      </div>
 
-      <form id="loginForm">
-        <label for="username">Username</label>
-        <input
-          id="username"
-          name="username"
-          type="text"
-          autocomplete="username"
-          required
-        >
-
-        <label for="password">Password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          required
-        >
-
-        <button id="loginButton" type="submit">Sign In</button>
-      </form>
-
-      <div id="message" class="message" role="status" aria-live="polite"></div>
-
-      <section id="account" class="account" aria-live="polite">
-        <h3>Account Verified</h3>
-        <p><strong>Name:</strong> <span id="accountName"></span></p>
-        <p><strong>Username:</strong> <span id="accountUsername"></span></p>
-        <p><strong>Base:</strong> <span id="accountBase"></span></p>
-        <p><strong>Role:</strong> <span id="accountRole"></span></p>
-        <p class="note">
-          Login testing is complete. Your announcements, resources, and
-          administrative tools are not enabled yet.
+      <section id="loginCard" class="card">
+        <h2>Staff Login</h2>
+        <p class="muted">
+          Sign in using your Staff Portal account.
         </p>
-        <button id="signOutButton" type="button">Return to Sign In</button>
+
+        <form id="loginForm">
+          <label for="loginUser">Username</label>
+          <input
+            id="loginUser"
+            name="username"
+            autocomplete="username"
+            maxlength="50"
+            required
+          >
+
+          <label for="loginPass">Password</label>
+          <input
+            id="loginPass"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            maxlength="128"
+            required
+          >
+
+          <button id="loginButton" type="submit">Sign In</button>
+        </form>
       </section>
 
-      <p class="note">
-        Access is subject to account activation and approval. Contact your
-        administrator if you cannot sign in.
-      </p>
-    </section>
+      <section id="registerCard" class="card hidden">
+        <h2>Create Staff Account</h2>
+        <p class="muted">
+          New accounts require administrator approval before you can sign in.
+        </p>
+
+        <form id="registerForm">
+          <label for="regName">Full Name</label>
+          <input
+            id="regName"
+            name="name"
+            autocomplete="name"
+            maxlength="100"
+            placeholder="First and last name"
+            required
+          >
+
+          <label for="regUser">Username</label>
+          <input
+            id="regUser"
+            name="username"
+            autocomplete="username"
+            minlength="3"
+            maxlength="50"
+            pattern="[A-Za-z0-9._-]+"
+            title="Use letters, numbers, periods, underscores, or hyphens."
+            required
+          >
+
+          <label for="regPass">Password (at least 12 characters)</label>
+          <input
+            id="regPass"
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            maxlength="128"
+            required
+          >
+
+          <label for="regConfirm">Confirm Password</label>
+          <input
+            id="regConfirm"
+            name="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            maxlength="128"
+            required
+          >
+
+          <button id="registerButton" type="submit">
+            Request Account
+          </button>
+        </form>
+      </section>
+
+      <div id="notice" class="notice hidden" role="status"
+           aria-live="polite"></div>
+    </div>
+
+    <div id="accountPanel" class="hidden">
+      <section class="card">
+        <h2>Account Verified</h2>
+        <p class="muted">
+          Your credentials were accepted. The full staff dashboard will be
+          enabled after secure session handling is implemented.
+        </p>
+
+        <div class="account-row">
+          <strong>Name:</strong> <span id="accountName"></span>
+        </div>
+        <div class="account-row">
+          <strong>Username:</strong> <span id="accountUsername"></span>
+        </div>
+        <div class="account-row">
+          <strong>Role:</strong> <span id="accountRole"></span>
+        </div>
+
+        <button id="returnButton" class="secondary" type="button">
+          Return to Sign In
+        </button>
+      </section>
+    </div>
   </main>
 
   <footer>
@@ -282,74 +269,79 @@
   <script>
     const API_BASE = "https://mrs-staff-portal.vercel.app";
 
-    const form = document.getElementById("loginForm");
-    const button = document.getElementById("loginButton");
-    const message = document.getElementById("message");
-    const account = document.getElementById("account");
+    const $ = id => document.getElementById(id);
 
-    document.getElementById("year").textContent =
-      new Date().getFullYear();
+    $("year").textContent = new Date().getFullYear();
 
-    function showMessage(text, type) {
-      message.textContent = text;
-      message.className = "message " + type;
+    function showNotice(message, type = "") {
+      const notice = $("notice");
+      notice.textContent = message;
+      notice.className = "notice" + (type ? " " + type : "");
     }
 
-    function resetLogin() {
-      form.reset();
-      form.style.display = "block";
-      account.style.display = "none";
-      message.className = "message";
-      message.textContent = "";
-      button.disabled = false;
-      button.textContent = "Sign In";
-      document.getElementById("username").focus();
+    function clearNotice() {
+      $("notice").textContent = "";
+      $("notice").className = "notice hidden";
     }
 
-    form.addEventListener("submit", async function(event) {
+    function showTab(tab) {
+      clearNotice();
+
+      const registering = tab === "register";
+      $("loginCard").classList.toggle("hidden", registering);
+      $("registerCard").classList.toggle("hidden", !registering);
+
+      $("loginTab").classList.toggle("secondary", registering);
+      $("registerTab").classList.toggle("secondary", !registering);
+    }
+
+    $("loginTab").addEventListener("click", () => showTab("login"));
+    $("registerTab").addEventListener("click", () => showTab("register"));
+
+    async function postJson(endpoint, data) {
+      const response = await fetch(API_BASE + endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error("The server returned an unexpected response.");
+      }
+
+      return { response, result };
+    }
+
+    $("loginForm").addEventListener("submit", async event => {
       event.preventDefault();
+      clearNotice();
 
-      const username = document.getElementById("username").value.trim();
-      const password = document.getElementById("password").value;
-
+      const button = $("loginButton");
       button.disabled = true;
       button.textContent = "Signing In...";
-      message.className = "message";
-      message.textContent = "";
 
       try {
-        const response = await fetch(API_BASE + "/api/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password })
+        const { response, result } = await postJson("/api/login", {
+          username: $("loginUser").value.trim().toLowerCase(),
+          password: $("loginPass").value
         });
 
-        const result = await response.json();
-
         if (!response.ok || !result.ok || !result.user) {
-          showMessage(
-            result.message || "Unable to sign in.",
-            "error"
-          );
+          showNotice(result.message || "Unable to sign in.", "error");
           return;
         }
 
-        const user = result.user;
+        $("accountName").textContent = result.user.name || "Not provided";
+        $("accountUsername").textContent = result.user.username || "";
+        $("accountRole").textContent = result.user.role || "STAFF";
 
-        document.getElementById("accountName").textContent =
-          user.name || "Not provided";
-        document.getElementById("accountUsername").textContent =
-          user.username || "";
-        document.getElementById("accountBase").textContent =
-          user.base || "Not assigned";
-        document.getElementById("accountRole").textContent =
-          user.role || "USER";
-
-        form.style.display = "none";
-        account.style.display = "block";
-        showMessage("Your credentials were verified.", "success");
+        $("auth").classList.add("hidden");
+        $("accountPanel").classList.remove("hidden");
       } catch (error) {
-        showMessage(
+        showNotice(
           "Could not contact the portal API. Please try again.",
           "error"
         );
@@ -359,10 +351,59 @@
       }
     });
 
-    document.getElementById("signOutButton").addEventListener(
-      "click",
-      resetLogin
-    );
+    $("registerForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      clearNotice();
+
+      const password = $("regPass").value;
+      const confirmPassword = $("regConfirm").value;
+
+      if (password !== confirmPassword) {
+        showNotice("Passwords do not match.", "error");
+        return;
+      }
+
+      const button = $("registerButton");
+      button.disabled = true;
+      button.textContent = "Submitting...";
+
+      try {
+        const { response, result } = await postJson("/api/register", {
+          name: $("regName").value.trim(),
+          username: $("regUser").value.trim().toLowerCase(),
+          password,
+          confirmPassword
+        });
+
+        if (!response.ok || !result.ok) {
+          showNotice(result.message || "Registration failed.", "error");
+          return;
+        }
+
+        $("registerForm").reset();
+        showTab("login");
+        showNotice(
+          result.message ||
+            "Registration submitted. An administrator must approve your account.",
+          "success"
+        );
+      } catch (error) {
+        showNotice(
+          "Could not contact the portal API. Please try again.",
+          "error"
+        );
+      } finally {
+        button.disabled = false;
+        button.textContent = "Request Account";
+      }
+    });
+
+    $("returnButton").addEventListener("click", () => {
+      $("accountPanel").classList.add("hidden");
+      $("auth").classList.remove("hidden");
+      $("loginForm").reset();
+      showTab("login");
+    });
   </script>
 </body>
 </html>
