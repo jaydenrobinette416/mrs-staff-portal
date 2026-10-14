@@ -329,10 +329,6 @@
           <button class="secondary" id="nextMonthButton" type="button">Next ›</button>
         </div>
         <div id="calendarGrid" class="calendar-grid"></div>
-        <div class="calendar-list">
-          <h3>Events This Month</h3>
-          <div id="calendarEventList" class="muted">Loading events…</div>
-        </div>
       </section>
       <div id="calendarNotice" class="notice hidden" role="status" aria-live="polite"></div>
     </div>
@@ -564,7 +560,6 @@
       const status = $("calendarStatus");
       status.textContent = "Loading calendar events…";
       $("calendarGrid").classList.add("hidden");
-      $("calendarEventList").textContent = "Loading events…";
       try {
         const data = await calendarRequest();
         calendarEvents = Array.isArray(data.events) ? data.events : [];
@@ -575,16 +570,13 @@
         $("calendarGrid").classList.remove("hidden");
       } catch (error) {
         status.textContent = "Calendar could not load: " + error.message;
-        $("calendarEventList").textContent = "Try Refresh Calendar. If the problem continues, contact a portal administrator.";
         $("calendarGrid").classList.add("hidden");
       }
     }
 
     function renderCalendar() {
       const grid = $("calendarGrid");
-      const list = $("calendarEventList");
       grid.replaceChildren();
-      list.replaceChildren();
       $("calendarMonthTitle").textContent = new Date(calendarYear, calendarMonth, 1)
         .toLocaleDateString(undefined, {month:"long", year:"numeric"});
 
@@ -636,20 +628,7 @@
         grid.appendChild(cell);
       }
 
-      const monthEvents = calendarEvents.filter(event => {
-        const date = eventDate(event);
-        return !Number.isNaN(date.getTime()) && date.getFullYear() === calendarYear && date.getMonth() === calendarMonth;
-      }).sort((a,b) => eventDateKey(a).localeCompare(eventDateKey(b)) || eventTimeLabel(a).localeCompare(eventTimeLabel(b)));
 
-      if (!monthEvents.length) {
-        const empty = document.createElement("p");
-        empty.className = "muted";
-        empty.textContent = "No events are scheduled for this month in the loaded calendar window.";
-        list.appendChild(empty);
-        return;
-      }
-
-      monthEvents.forEach(event => list.appendChild(renderEventCard(event)));
     }
 
     function safeId(value) {
