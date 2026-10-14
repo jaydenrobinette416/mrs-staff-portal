@@ -3,6 +3,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 const crypto = require("crypto");
 
 const SESSION_COOKIE = "mrs_session";
+const ALLOWED_ORIGIN = "https://portal.maidenrescuesquad.org";
 
 let cachedClient = global.portalSessionMongoClient;
 
@@ -23,16 +24,12 @@ async function getDatabase() {
 }
 
 function getCookie(req, name) {
-  const cookieHeader = req.headers.cookie || "";
-
-  for (const part of cookieHeader.split(";")) {
+  for (const part of (req.headers.cookie || "").split(";")) {
     const separator = part.indexOf("=");
 
-    if (separator === -1) continue;
+    if (separator < 0) continue;
 
-    const key = part.slice(0, separator).trim();
-
-    if (key === name) {
+    if (part.slice(0, separator).trim() === name) {
       return part.slice(separator + 1).trim();
     }
   }
@@ -48,30 +45,20 @@ function verifySession(token) {
   }
 
   const parts = token.split(".");
-
   if (parts.length !== 2) return null;
 
   const [encoded, signature] = parts;
 
-  const expectedSignature = crypto
+  const expected = crypto
     .createHmac("sha256", secret)
     .update(encoded)
     .digest();
 
-  let suppliedSignature;
-
-  try {
-    suppliedSignature = Buffer.from(signature, "base64url");
-  } catch {
-    return null;
-  }
+  const supplied = Buffer.from(signature, "base64url");
 
   if (
-    suppliedSignature.length !== expectedSignature.length ||
-    !crypto.timingSafeEqual(
-      suppliedSignature,
-      expectedSignature
-    )
+    supplied.length !== expected.length ||
+    !crypto.timingSafeEqual(supplied, expected)
   ) {
     return null;
   }
@@ -96,17 +83,22 @@ function verifySession(token) {
   }
 }
 
-module.exports = async function handler(req, res) {
-  const allowedOrigin = "https://portal.maidenrescuesquad.org";
+function clearSessionCookie(res) {
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
+  );
+}
 
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+module.exports = async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Vary", "Origin");
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.headers.origin && req.headers.origin !== allowedOrigin) {
+  if (req.headers.origin && req.headers.origin !== ALLOWED_ORIGIN) {
     return res.status(403).json({
       ok: false,
       message: "Origin not allowed."
@@ -117,17 +109,28 @@ module.exports = async function handler(req, res) {
     return res.status(204).end();
   }
 
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET, OPTIONS");
+  if (!["GET", "POST"].includes(req.method)) {
+    res.setHeader("Allow", "GET, POST, OPTIONS");
     return res.status(405).json({
       ok: false,
       message: "Method not allowed."
     });
   }
 
+  // Logout does not require a valid session.
+  if (req.method === "POST" && req.body?.action === "logout") {
+    clearSessionCookie(res);
+
+    return res.status(200).json({
+      ok: true,
+      message: "Signed out successfully."
+    });
+  }
+
   try {
-    const token = getCookie(req, SESSION_COOKIE);
-    const payload = verifySession(token);
+    const payload = verifySession(
+      getCookie(req, SESSION_COOKIE)
+    );
 
     if (!payload) {
       return res.status(401).json({
@@ -157,10 +160,7 @@ module.exports = async function handler(req, res) {
       user.active !== true ||
       user.approved !== true
     ) {
-      res.setHeader(
-        "Set-Cookie",
-        `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
-      );
+      clearSessionCookie(res);
 
       return res.status(401).json({
         ok: false,
