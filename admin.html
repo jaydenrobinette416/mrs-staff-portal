@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#12294a">
+  <title>Maiden Rescue Squad | Admin Panel</title>
+  <style>
+    :root { font-family: Arial, Helvetica, sans-serif; color: #17243b; background: #eef2f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: #12294a; color: white; padding: 22px 5vw; }
+    header h1 { margin: 0; font-size: 24px; }
+    header p { margin: 6px 0 0; color: #cdd8e8; }
+    main { max-width: 1100px; margin: 28px auto; padding: 0 18px; }
+    .card { background: white; border-radius: 13px; box-shadow: 0 5px 20px #14284a13; padding: 24px; margin-bottom: 18px; }
+    button, .button-link { cursor: pointer; background: #1d477a; border: 0; border-radius: 8px; color: white; padding: 11px 16px; font-weight: 600; font: inherit; font-size: 14px; text-decoration: none; display: inline-block; }
+    button.secondary, .button-link.secondary { background: #e8eef7; color: #16345b; }
+    button.danger { background: #a83232; }
+    button:disabled { opacity: .5; cursor: wait; }
+    .muted { color: #657387; }
+    .hidden { display: none !important; }
+    .notice { padding: 12px 14px; background: #e7f0fa; border-radius: 8px; margin: 12px 0; }
+    .notice.error { background: #fdeaea; color: #842424; }
+    .notice.success { background: #e5f6e9; color: #205b30; }
+    .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .admin-user { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid #e2e8f0; }
+    .admin-user:last-child { border-bottom: 0; }
+    .admin-user h3 { margin: 0 0 6px; }
+    .admin-user p { margin: 4px 0; }
+    .admin-user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    footer { text-align: center; padding: 20px; color: #657387; }
+    @media (max-width: 600px) { .admin-user { align-items: stretch; flex-direction: column; } .card { padding: 18px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MAIDEN RESCUE SQUAD</h1>
+    <p>Staff Portal · Administrator Panel</p>
+  </header>
+  <main>
+    <section id="checkingCard" class="card"><h2>Verifying administrator access</h2><p class="muted">Please wait while your secure session is checked.</p></section>
+    <section id="deniedCard" class="card hidden"><h2>Administrator access required</h2><p id="deniedMessage" class="muted">You must sign in with an approved administrator account to use this page.</p><a class="button-link" href="/">Return to Staff Portal</a></section>
+    <div id="adminContent" class="hidden">
+      <section class="card">
+        <div class="section-heading"><div><h2>Administrator Panel</h2><p class="muted">Manage staff account requests and administrative tasks.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="button-link secondary" href="/">Staff Portal Home</a><button id="logoutButton" class="secondary" type="button">Sign Out</button></div></div>
+        <p>Signed in as <strong id="adminName"></strong>.</p>
+        <div id="pageNotice" class="notice hidden" role="status" aria-live="polite"></div>
+      </section>
+      <section class="card" aria-labelledby="approvalHeading">
+        <div class="section-heading"><div><h2 id="approvalHeading">Account Approvals</h2><p class="muted">Review staff accounts waiting for approval.</p></div><button id="refreshPendingButton" class="secondary" type="button">Refresh List</button></div>
+        <div id="adminNotice" class="notice hidden" role="status" aria-live="polite"></div>
+        <div id="pendingList" aria-live="polite"><p class="muted">Loading pending accounts...</p></div>
+      </section>
+      <section class="card"><h2>More Admin Tools</h2><p class="muted">This page is the home for future administrative functions. Additional tools can be added here as they are built.</p></section>
+    </div>
+  </main>
+  <footer>Maiden Rescue Squad &copy; <span id="year"></span></footer>
+<script>
+  const API_BASE = "https://api.maidenrescuesquad.org";
+  const $ = id => document.getElementById(id);
+  $("year").textContent = new Date().getFullYear();
+  function notice(id, message, type = "") { const el = $(id); el.textContent = message; el.className = "notice" + (type ? " " + type : ""); }
+  function hideNotice(id) { $(id).textContent = ""; $(id).className = "notice hidden"; }
+
+  async function loadPendingAccounts() {
+    const list = $("pendingList"), refresh = $("refreshPendingButton");
+    refresh.disabled = true; list.textContent = "Loading pending accounts..."; hideNotice("adminNotice");
+    try {
+      const response = await fetch(API_BASE + "/api/admin", { method: "GET", credentials: "include", headers: { "Accept": "application/json" }, cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !Array.isArray(result.users)) { list.textContent = ""; notice("adminNotice", result.message || "Unable to load pending accounts.", "error"); return; }
+      list.textContent = "";
+      if (!result.users.length) { const empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "There are no accounts waiting for approval."; list.appendChild(empty); return; }
+      for (const user of result.users) {
+        const row = document.createElement("div"); row.className = "admin-user";
+        const details = document.createElement("div"), name = document.createElement("h3"), username = document.createElement("p"), created = document.createElement("p");
+        name.textContent = user.name || "Name not provided"; username.className = "muted"; username.textContent = "Username: " + (user.username || "—");
+        created.className = "muted"; const date = user.createdAt ? new Date(user.createdAt) : null; created.textContent = "Registered: " + (date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "Date unavailable");
+        details.append(name, username, created);
+        const actions = document.createElement("div"); actions.className = "admin-user-actions";
+        const approve = document.createElement("button"); approve.type = "button"; approve.textContent = "Approve";
+        const reject = document.createElement("button"); reject.type = "button"; reject.className = "danger"; reject.textContent = "Reject";
+        approve.addEventListener("click", () => reviewAccount(user.id, "approve", approve, reject)); reject.addEventListener("click", () => reviewAccount(user.id, "reject", approve, reject));
+        actions.append(approve, reject); row.append(details, actions); list.appendChild(row);
+      }
+    } catch (error) { list.textContent = ""; notice("adminNotice", "Could not contact the administrator API. Please try again.", "error"); }
+    finally { refresh.disabled = false; }
+  }
+  async function reviewAccount(userId, action, approveButton, rejectButton) {
+    const actionButton = action === "approve" ? approveButton : rejectButton;
+    if (action === "reject" && !window.confirm("Reject this account? It will be deactivated and will no longer be able to sign in.")) return;
+    approveButton.disabled = true; rejectButton.disabled = true; actionButton.textContent = action === "approve" ? "Approving..." : "Rejecting...";
+    try {
+      const response = await fetch(API_BASE + "/api/admin", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, userId }), cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok || !result.ok) { notice("adminNotice", result.message || "Unable to update this account.", "error"); return; }
+      notice("adminNotice", result.message || "Account updated.", "success"); await loadPendingAccounts();
+    } catch (error) { notice("adminNotice", "Could not contact the administrator API. Please try again.", "error"); }
+    finally { approveButton.disabled = false; rejectButton.disabled = false; actionButton.textContent = action === "approve" ? "Approve" : "Reject"; }
+  }
+  $("refreshPendingButton").addEventListener("click", loadPendingAccounts);
+  async function checkAdminSession() {
+    try {
+      const response = await fetch(API_BASE + "/api/session", { method: "GET", credentials: "include", headers: { "Accept": "application/json" }, cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok || !result.authenticated || !result.user) { $("checkingCard").classList.add("hidden"); $("deniedCard").classList.remove("hidden"); return; }
+      if (result.user.role !== "ADMIN") { $("checkingCard").classList.add("hidden"); $("deniedMessage").textContent = "Your account is signed in, but it does not have administrator privileges."; $("deniedCard").classList.remove("hidden"); return; }
+      $("adminName").textContent = result.user.name || result.user.username || "Administrator";
+      $("checkingCard").classList.add("hidden"); $("adminContent").classList.remove("hidden"); await loadPendingAccounts();
+    } catch (error) { $("checkingCard").classList.add("hidden"); $("deniedMessage").textContent = "Could not verify your session. Return to the Staff Portal and sign in again."; $("deniedCard").classList.remove("hidden"); }
+  }
+  $("logoutButton").addEventListener("click", async () => {
+    const button = $("logoutButton"); button.disabled = true; button.textContent = "Signing Out...";
+    try {
+      const response = await fetch(API_BASE + "/api/session", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "logout" }), cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok || !result.ok) { notice("pageNotice", result.message || "Unable to sign out. Please try again.", "error"); button.disabled = false; button.textContent = "Sign Out"; return; }
+      window.location.href = "/";
+    } catch (error) { notice("pageNotice", "Could not contact the portal API. Please try again.", "error"); button.disabled = false; button.textContent = "Sign Out"; }
+  });
+  checkAdminSession();
+</script>
+</body>
+</html>
