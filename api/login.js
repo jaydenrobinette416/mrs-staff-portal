@@ -45,7 +45,7 @@ function signSession(payload) {
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = "https://mrs-staff-portal.vercel.app";
+  const allowedOrigin = "https://portal.maidenrescuesquad.org";
 
   res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
