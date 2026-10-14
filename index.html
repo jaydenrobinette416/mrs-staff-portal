@@ -255,7 +255,10 @@
           <strong>Role:</strong> <span id="accountRole"></span>
         </div>
 
-        <p class="muted">Your session is active on this browser. Sign-out controls will be added after the server-side logout action is implemented.</p>
+        <div class="actions">
+          <button id="logoutButton" class="secondary" type="button">Sign Out</button>
+        </div>
+        <div id="accountNotice" class="notice hidden" role="status" aria-live="polite"></div>
       </section>
     </div>
   </main>
@@ -419,6 +422,50 @@
       $("auth").classList.add("hidden");
       $("accountPanel").classList.remove("hidden");
     }
+
+    $("logoutButton").addEventListener("click", async () => {
+      const button = $("logoutButton");
+      button.disabled = true;
+      button.textContent = "Signing Out...";
+      $("accountNotice").className = "notice hidden";
+      $("accountNotice").textContent = "";
+
+      try {
+        const response = await fetch(API_BASE + "/api/session", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "logout" }),
+          cache: "no-store"
+        });
+
+        let result;
+        try {
+          result = await response.json();
+        } catch {
+          throw new Error("The server returned an unexpected response.");
+        }
+
+        if (!response.ok || !result.ok) {
+          $("accountNotice").textContent = result.message || "Unable to sign out. Please try again.";
+          $("accountNotice").className = "notice error";
+          return;
+        }
+
+        $("accountPanel").classList.add("hidden");
+        $("auth").classList.remove("hidden");
+        $("loginForm").reset();
+        $("loginPass").value = "";
+        showTab("login");
+        showNotice("You have signed out successfully.", "success");
+      } catch (error) {
+        $("accountNotice").textContent = "Could not contact the portal API. Please try again.";
+        $("accountNotice").className = "notice error";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Sign Out";
+      }
+    });
 
     async function restoreSession() {
       try {
