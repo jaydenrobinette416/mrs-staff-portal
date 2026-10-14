@@ -241,8 +241,8 @@
       <section class="card">
         <h2>Account Verified</h2>
         <p class="muted">
-          Your credentials were accepted. The full staff dashboard will be
-          enabled after secure session handling is implemented.
+          Your secure session has been verified. Staff portal features will be
+          added here as they are enabled.
         </p>
 
         <div class="account-row">
@@ -255,9 +255,7 @@
           <strong>Role:</strong> <span id="accountRole"></span>
         </div>
 
-        <button id="returnButton" class="secondary" type="button">
-          Return to Sign In
-        </button>
+        <p class="muted">Your session is active on this browser. Sign-out controls will be added after the server-side logout action is implemented.</p>
       </section>
     </div>
   </main>
@@ -298,12 +296,16 @@
     $("loginTab").addEventListener("click", () => showTab("login"));
     $("registerTab").addEventListener("click", () => showTab("register"));
 
-    async function postJson(endpoint, data) {
-      const response = await fetch(API_BASE + endpoint, {
+    async function postJson(endpoint, data, includeCredentials = false) {
+      const options = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data)
-      });
+      };
+
+      if (includeCredentials) options.credentials = "include";
+
+      const response = await fetch(API_BASE + endpoint, options);
 
       let result;
       try {
@@ -327,19 +329,31 @@
         const { response, result } = await postJson("/api/login", {
           username: $("loginUser").value.trim().toLowerCase(),
           password: $("loginPass").value
-        });
+        }, true);
 
         if (!response.ok || !result.ok || !result.user) {
           showNotice(result.message || "Unable to sign in.", "error");
           return;
         }
 
-        $("accountName").textContent = result.user.name || "Not provided";
-        $("accountUsername").textContent = result.user.username || "";
-        $("accountRole").textContent = result.user.role || "STAFF";
+        // Confirm the cookie was stored and accepted by the session endpoint.
+        const sessionResponse = await fetch(API_BASE + "/api/session", {
+          method: "GET",
+          credentials: "include",
+          headers: { "Accept": "application/json" },
+          cache: "no-store"
+        });
+        const sessionResult = await sessionResponse.json();
 
-        $("auth").classList.add("hidden");
-        $("accountPanel").classList.remove("hidden");
+        if (!sessionResponse.ok || !sessionResult.authenticated || !sessionResult.user) {
+          showNotice(
+            sessionResult.message || "Login succeeded, but the session could not be verified. Please try again.",
+            "error"
+          );
+          return;
+        }
+
+        showAccount(sessionResult.user);
       } catch (error) {
         showNotice(
           "Could not contact the portal API. Please try again.",
@@ -398,12 +412,35 @@
       }
     });
 
-    $("returnButton").addEventListener("click", () => {
-      $("accountPanel").classList.add("hidden");
-      $("auth").classList.remove("hidden");
-      $("loginForm").reset();
-      showTab("login");
-    });
+    function showAccount(user) {
+      $("accountName").textContent = user.name || "Not provided";
+      $("accountUsername").textContent = user.username || "";
+      $("accountRole").textContent = user.role || "STAFF";
+      $("auth").classList.add("hidden");
+      $("accountPanel").classList.remove("hidden");
+    }
+
+    async function restoreSession() {
+      try {
+        const response = await fetch(API_BASE + "/api/session", {
+          method: "GET",
+          credentials: "include",
+          headers: { "Accept": "application/json" },
+          cache: "no-store"
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        if (result.ok && result.authenticated && result.user) {
+          showAccount(result.user);
+        }
+      } catch (error) {
+        // Keep the login form available if the session check cannot connect.
+      }
+    }
+
+    restoreSession();
   </script>
 </body>
 </html>
