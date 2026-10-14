@@ -1,6 +1,9 @@
 
 const { MongoClient } = require("mongodb");
+const crypto = require("crypto");
+const { promisify } = require("util");
 
+const scrypt = promisify(crypto.scrypt);
 let cachedClient = global.portalMongoClient;
 
 async function getDatabase() {
@@ -15,14 +18,15 @@ async function getDatabase() {
   }
 
   return cachedClient.db(
-    process.env.APPARATUS_DB_NAME || "ApparatusCheck"
+    process.env.PORTAL_DB_NAME || "MRSStaffPortal"
   );
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", "https://mrs-staff-portal.vercel.app");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
@@ -48,15 +52,38 @@ module.exports = async function handler(req, res) {
     }
 
     const db = await getDatabase();
-    const user = await db.collection(
-      process.env.USER_COLLECTION || "users"
-    ).findOne({
+    const user = await db.collection("users").findOne({
       username,
-      password,
       active: true
     });
 
     if (!user) {
+      return res.status(401).json({
+        ok: false,
+        message: "Invalid username or password."
+      });
+    }
+
+    // Portal accounts store a salt and scrypt password hash.
+    if (!user.passwordSalt || !user.passwordHash) {
+      return res.status(401).json({
+        ok: false,
+        message: "This account is not configured for secure login."
+      });
+    }
+
+    const actualHash = await scrypt(
+      password,
+      user.passwordSalt,
+      64
+    );
+
+    const expectedHash = Buffer.from(user.passwordHash, "hex");
+
+    if (
+      expectedHash.length !== actualHash.length ||
+      !crypto.timingSafeEqual(actualHash, expectedHash)
+    ) {
       return res.status(401).json({
         ok: false,
         message: "Invalid username or password."
@@ -76,8 +103,7 @@ module.exports = async function handler(req, res) {
         id: String(user._id),
         name: user.name || "",
         username: user.username,
-        base: user.base || "",
-        role: user.role || "USER"
+        role: user.role || "STAFF"
       }
     });
   } catch (error) {
