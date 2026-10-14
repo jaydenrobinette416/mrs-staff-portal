@@ -113,6 +113,28 @@
       overflow-wrap: anywhere;
     }
 
+    .admin-user {
+      border-top: 1px solid #e2e7ee;
+      padding: 16px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .admin-user-details { min-width: 0; }
+    .admin-user-details p { margin: 5px 0; overflow-wrap: anywhere; }
+    .admin-user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button.danger { background: #922b35; }
+    .section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
     footer {
       text-align: center;
       color: #657387;
@@ -259,6 +281,20 @@
           <button id="logoutButton" class="secondary" type="button">Sign Out</button>
         </div>
         <div id="accountNotice" class="notice hidden" role="status" aria-live="polite"></div>
+      </section>
+
+      <section id="adminPanel" class="card hidden" aria-labelledby="adminHeading">
+        <div class="section-heading">
+          <div>
+            <h2 id="adminHeading">Administrator Approval</h2>
+            <p class="muted">Review staff accounts waiting for approval.</p>
+          </div>
+          <button id="refreshPendingButton" class="secondary" type="button">Refresh List</button>
+        </div>
+        <div id="adminNotice" class="notice hidden" role="status" aria-live="polite"></div>
+        <div id="pendingList" aria-live="polite">
+          <p class="muted">Pending accounts will appear here.</p>
+        </div>
       </section>
     </div>
   </main>
@@ -416,12 +452,142 @@
     });
 
     function showAccount(user) {
+      const role = user.role || "STAFF";
       $("accountName").textContent = user.name || "Not provided";
       $("accountUsername").textContent = user.username || "";
-      $("accountRole").textContent = user.role || "STAFF";
+      $("accountRole").textContent = role;
       $("auth").classList.add("hidden");
       $("accountPanel").classList.remove("hidden");
+
+      const isAdmin = role === "ADMIN";
+      $("adminPanel").classList.toggle("hidden", !isAdmin);
+      if (isAdmin) loadPendingAccounts();
     }
+
+    function showAdminNotice(message, type = "") {
+      const notice = $("adminNotice");
+      notice.textContent = message;
+      notice.className = "notice" + (type ? " " + type : "");
+    }
+
+    async function loadPendingAccounts() {
+      const list = $("pendingList");
+      const refreshButton = $("refreshPendingButton");
+      refreshButton.disabled = true;
+      list.textContent = "Loading pending accounts...";
+      $("adminNotice").className = "notice hidden";
+      $("adminNotice").textContent = "";
+
+      try {
+        const response = await fetch(API_BASE + "/api/admin", {
+          method: "GET",
+          credentials: "include",
+          headers: { "Accept": "application/json" },
+          cache: "no-store"
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.ok || !Array.isArray(result.users)) {
+          list.textContent = "";
+          showAdminNotice(result.message || "Unable to load pending accounts.", "error");
+          return;
+        }
+
+        list.textContent = "";
+        if (result.users.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "muted";
+          empty.textContent = "There are no accounts waiting for approval.";
+          list.appendChild(empty);
+          return;
+        }
+
+        for (const user of result.users) {
+          const row = document.createElement("div");
+          row.className = "admin-user";
+
+          const details = document.createElement("div");
+          details.className = "admin-user-details";
+
+          const name = document.createElement("h3");
+          name.textContent = user.name || "Name not provided";
+          details.appendChild(name);
+
+          const username = document.createElement("p");
+          username.className = "muted";
+          username.textContent = "Username: " + (user.username || "—");
+          details.appendChild(username);
+
+          const created = document.createElement("p");
+          created.className = "muted";
+          const date = user.createdAt ? new Date(user.createdAt) : null;
+          created.textContent = "Registered: " + (date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "Date unavailable");
+          details.appendChild(created);
+
+          const actions = document.createElement("div");
+          actions.className = "admin-user-actions";
+
+          const approve = document.createElement("button");
+          approve.type = "button";
+          approve.textContent = "Approve";
+          approve.addEventListener("click", () => reviewAccount(user.id, "approve", approve, reject));
+
+          const reject = document.createElement("button");
+          reject.type = "button";
+          reject.className = "danger";
+          reject.textContent = "Reject";
+          reject.addEventListener("click", () => reviewAccount(user.id, "reject", approve, reject));
+
+          actions.append(approve, reject);
+          row.append(details, actions);
+          list.appendChild(row);
+        }
+      } catch (error) {
+        list.textContent = "";
+        showAdminNotice("Could not contact the administrator API. Please try again.", "error");
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    async function reviewAccount(userId, action, approveButton, rejectButton) {
+      const actionButton = action === "approve" ? approveButton : rejectButton;
+      const originalText = actionButton.textContent;
+      if (action === "reject" && !window.confirm("Reject this account? It will be deactivated and will no longer be able to sign in.")) {
+        return;
+      }
+
+      approveButton.disabled = true;
+      rejectButton.disabled = true;
+      actionButton.textContent = action === "approve" ? "Approving..." : "Rejecting...";
+
+      try {
+        const response = await fetch(API_BASE + "/api/admin", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, userId }),
+          cache: "no-store"
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          showAdminNotice(result.message || "Unable to update this account.", "error");
+          return;
+        }
+
+        showAdminNotice(result.message || "Account updated.", "success");
+        await loadPendingAccounts();
+      } catch (error) {
+        showAdminNotice("Could not contact the administrator API. Please try again.", "error");
+      } finally {
+        approveButton.disabled = false;
+        rejectButton.disabled = false;
+        actionButton.textContent = originalText;
+      }
+    }
+
+    $("refreshPendingButton").addEventListener("click", loadPendingAccounts);
 
     $("logoutButton").addEventListener("click", async () => {
       const button = $("logoutButton");
@@ -453,6 +619,7 @@
         }
 
         $("accountPanel").classList.add("hidden");
+        $("adminPanel").classList.add("hidden");
         $("auth").classList.remove("hidden");
         $("loginForm").reset();
         $("loginPass").value = "";
