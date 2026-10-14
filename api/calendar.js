@@ -18,7 +18,9 @@ async function getDatabase() {
     global.portalCalendarMongoClient = cachedClient;
   }
 
-  return cachedClient.db(process.env.PORTAL_DB_NAME || "MRSStaffPortal");
+  return cachedClient.db(
+    process.env.PORTAL_DB_NAME || "MRSStaffPortal"
+  );
 }
 
 function getCookie(req, name) {
@@ -52,7 +54,13 @@ function verifySession(token) {
     .update(encoded)
     .digest();
 
-  const supplied = Buffer.from(signature, "base64url");
+  let supplied;
+
+  try {
+    supplied = Buffer.from(signature, "base64url");
+  } catch {
+    return null;
+  }
 
   if (
     supplied.length !== expected.length ||
@@ -82,7 +90,9 @@ function verifySession(token) {
 }
 
 async function getApprovedUser(req, db) {
-  const payload = verifySession(getCookie(req, SESSION_COOKIE));
+  const payload = verifySession(
+    getCookie(req, SESSION_COOKIE)
+  );
 
   if (!payload) return null;
 
@@ -117,15 +127,20 @@ function getBody(req) {
 }
 
 function validEventId(value) {
-  return typeof value === "string" &&
+  return (
+    typeof value === "string" &&
     value.length > 0 &&
-    value.length <= 500;
+    value.length <= 500
+  );
 }
 
 async function ensureIndexes(db) {
   await db.collection("registrations").createIndex(
     { eventId: 1, userId: 1 },
-    { unique: true, name: "one_registration_per_user_event" }
+    {
+      unique: true,
+      name: "one_registration_per_user_event"
+    }
   );
 
   await db.collection("registrations").createIndex(
@@ -134,7 +149,10 @@ async function ensureIndexes(db) {
 
   await db.collection("eventSettings").createIndex(
     { eventId: 1 },
-    { unique: true, name: "one_settings_document_per_event" }
+    {
+      unique: true,
+      name: "one_settings_document_per_event"
+    }
   );
 }
 
@@ -153,7 +171,12 @@ async function ensureEventSettings(db, eventId) {
   );
 }
 
-async function registerUser(db, eventId, targetUser, addedByAdmin = false) {
+async function registerUser(
+  db,
+  eventId,
+  targetUser,
+  addedByAdmin = false
+) {
   const registrations = db.collection("registrations");
   const settings = db.collection("eventSettings");
 
@@ -165,7 +188,10 @@ async function registerUser(db, eventId, targetUser, addedByAdmin = false) {
   try {
     await session.withTransaction(async () => {
       const existing = await registrations.findOne(
-        { eventId, userId: targetUser._id.toString() },
+        {
+          eventId,
+          userId: targetUser._id.toString()
+        },
         { session }
       );
 
@@ -179,7 +205,12 @@ async function registerUser(db, eventId, targetUser, addedByAdmin = false) {
           eventId,
           $expr: {
             $or: [
-              { $eq: [{ $ifNull: ["$capacity", null] }, null] },
+              {
+                $eq: [
+                  { $ifNull: ["$capacity", null] },
+                  null
+                ]
+              },
               {
                 $lt: [
                   { $ifNull: ["$registeredCount", 0] },
@@ -259,6 +290,7 @@ async function withdrawUser(db, eventId, userId) {
 async function getEventRoster(db, eventId) {
   const [settings, registrations] = await Promise.all([
     db.collection("eventSettings").findOne({ eventId }),
+
     db.collection("registrations")
       .find({ eventId })
       .sort({ createdAt: 1 })
@@ -272,13 +304,17 @@ async function getEventRoster(db, eventId) {
       .toArray()
   ]);
 
+  const capacity = settings?.capacity ?? null;
+
   return {
     eventId,
-    capacity: settings?.capacity ?? null,
+    capacity,
     registeredCount: registrations.length,
-    spotsRemaining: settings?.capacity == null
+
+    spotsRemaining: capacity === null
       ? null
-      : Math.max(0, settings.capacity - registrations.length),
+      : Math.max(0, capacity - registrations.length),
+
     registrations: registrations.map(registration => ({
       id: registration._id.toString(),
       userId: registration.userId,
@@ -308,13 +344,17 @@ async function getCalendarEvents(db) {
   });
 
   if (!response.ok) {
-    throw new Error(`Calendar bridge returned HTTP ${response.status}`);
+    throw new Error(
+      `Calendar bridge returned HTTP ${response.status}`
+    );
   }
 
   const data = await response.json();
 
   if (!data.ok || !Array.isArray(data.events)) {
-    throw new Error("Calendar bridge returned an invalid response.");
+    throw new Error(
+      "Calendar bridge returned an invalid response."
+    );
   }
 
   const events = [];
@@ -326,6 +366,7 @@ async function getCalendarEvents(db) {
 
     events.push({
       ...event,
+
       registration: {
         capacity: roster.capacity,
         registeredCount: roster.registeredCount,
@@ -339,15 +380,42 @@ async function getCalendarEvents(db) {
   return events;
 }
 
+async function calendarEventExists(eventId) {
+  const events = await getCalendarEvents(
+    await getDatabase()
+  );
+
+  return events.some(event => event.id === eventId);
+}
+
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    ALLOWED_ORIGIN
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Credentials",
+    "true"
+  );
+
   res.setHeader("Vary", "Origin");
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.headers.origin && req.headers.origin !== ALLOWED_ORIGIN) {
+  if (
+    req.headers.origin &&
+    req.headers.origin !== ALLOWED_ORIGIN
+  ) {
     return res.status(403).json({
       ok: false,
       error: "Origin not allowed."
@@ -360,6 +428,7 @@ module.exports = async function handler(req, res) {
 
   if (!["GET", "POST"].includes(req.method)) {
     res.setHeader("Allow", "GET, POST, OPTIONS");
+
     return res.status(405).json({
       ok: false,
       error: "Method not allowed."
@@ -394,8 +463,10 @@ module.exports = async function handler(req, res) {
 
       return res.status(200).json({
         ok: true,
+
         events: events.map(event => ({
           ...event,
+
           registration: {
             ...event.registration,
             signedUp: signedUpIds.has(event.id)
@@ -412,6 +483,15 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({
         ok: false,
         error: "A valid event ID is required."
+      });
+    }
+
+    const exists = await calendarEventExists(eventId);
+
+    if (!exists) {
+      return res.status(404).json({
+        ok: false,
+        error: "That event could not be found on the squad calendar."
       });
     }
 
@@ -448,9 +528,11 @@ module.exports = async function handler(req, res) {
 
       return res.status(200).json({
         ok: true,
+
         message: removed
           ? "You have withdrawn from this event."
           : "You were not registered for this event.",
+
         registration: await getEventRoster(db, eventId)
       });
     }
@@ -474,7 +556,11 @@ module.exports = async function handler(req, res) {
 
       if (
         capacity !== null &&
-        (!Number.isSafeInteger(capacity) || capacity < 0 || capacity > 10000)
+        (
+          !Number.isSafeInteger(capacity) ||
+          capacity < 0 ||
+          capacity > 10000
+        )
       ) {
         return res.status(400).json({
           ok: false,
@@ -484,7 +570,8 @@ module.exports = async function handler(req, res) {
 
       await ensureEventSettings(db, eventId);
 
-      const current = await db.collection("eventSettings").findOne({ eventId });
+      const current = await db.collection("eventSettings")
+        .findOne({ eventId });
 
       if (
         capacity !== null &&
@@ -537,7 +624,12 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const result = await registerUser(db, eventId, targetUser, true);
+      const result = await registerUser(
+        db,
+        eventId,
+        targetUser,
+        true
+      );
 
       if (result === "full") {
         return res.status(409).json({
@@ -570,7 +662,11 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const removed = await withdrawUser(db, eventId, body.userId);
+      const removed = await withdrawUser(
+        db,
+        eventId,
+        body.userId
+      );
 
       return res.status(200).json({
         ok: true,
