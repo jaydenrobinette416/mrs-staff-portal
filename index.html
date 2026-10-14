@@ -144,6 +144,16 @@
     .capacity-input { width:120px; margin:0; }
     .calendar-status { padding:12px 0; color:#657387; }
     .calendar-event-description { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; }
+    .event-viewer-backdrop { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(10,24,43,.65); }
+    .event-viewer-backdrop[hidden] { display:none !important; }
+    .event-viewer { width:min(680px,100%); max-height:90vh; overflow:auto; background:#fff; border-radius:14px; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,.28); }
+    .event-viewer-header { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; border-bottom:1px solid #e2e7ee; padding-bottom:12px; margin-bottom:8px; }
+    .event-viewer-header h2 { margin:0; font-size:21px; }
+    .event-viewer-close { flex:0 0 auto; padding:7px 12px; }
+    .event-viewer .calendar-list-item { border:0; padding:0; }
+    .event-viewer .event-details-toggle { display:none; }
+    .event-viewer .event-details-content[hidden] { display:block; }
+    @media (max-width:650px) { .event-viewer-backdrop { padding:8px; align-items:flex-end; } .event-viewer { max-height:92vh; padding:16px; border-radius:14px 14px 8px 8px; } }
     @media (max-width:650px) { .calendar-day { min-height:65px; padding:3px; } .calendar-weekday { font-size:10px; padding:7px 1px; } .day-number { width:21px; height:21px; } .calendar-event-chip { font-size:9px; padding:3px; } .calendar-work-names { font-size:9px; padding:2px 2px 0; } }
 
     .admin-user {
@@ -331,6 +341,15 @@
         <div id="calendarGrid" class="calendar-grid"></div>
       </section>
       <div id="calendarNotice" class="notice hidden" role="status" aria-live="polite"></div>
+      <div id="eventViewerBackdrop" class="event-viewer-backdrop" hidden>
+        <section class="event-viewer" role="dialog" aria-modal="true" aria-labelledby="eventViewerTitle">
+          <div class="event-viewer-header">
+            <h2 id="eventViewerTitle">Event details</h2>
+            <button id="closeEventViewerButton" class="secondary event-viewer-close" type="button" aria-label="Close event details">Close ✕</button>
+          </div>
+          <div id="eventViewerBody"></div>
+        </section>
+      </div>
     </div>
   </main>
 
@@ -614,7 +633,7 @@
           chip.type = "button"; chip.className = "calendar-event-chip";
           chip.textContent = event.title || "Untitled event";
           chip.title = "Click to view event details";
-          chip.addEventListener("click", () => toggleEventDetails(event.id, true));
+          chip.addEventListener("click", () => openEventViewer(event));
           wrap.appendChild(chip);
           const registration = event.registration || {};
           const attendees = Array.isArray(registration.registrations) ? registration.registrations : [];
@@ -630,6 +649,38 @@
 
 
     }
+
+    function openEventViewer(event) {
+      const backdrop = $("eventViewerBackdrop");
+      const body = $("eventViewerBody");
+      body.replaceChildren();
+      const card = renderEventCard(event);
+      const toggle = card.querySelector(".event-details-toggle");
+      if (toggle) toggle.remove();
+      const details = card.querySelector(".event-details-content");
+      if (details) details.hidden = false;
+      card.style.border = "0";
+      card.style.padding = "0";
+      body.appendChild(card);
+      $("eventViewerTitle").textContent = event.title || "Event details";
+      backdrop.hidden = false;
+      document.body.style.overflow = "hidden";
+      $("closeEventViewerButton").focus();
+    }
+
+    function closeEventViewer() {
+      $("eventViewerBackdrop").hidden = true;
+      $("eventViewerBody").replaceChildren();
+      document.body.style.overflow = "";
+    }
+
+    $("closeEventViewerButton").addEventListener("click", closeEventViewer);
+    $("eventViewerBackdrop").addEventListener("click", event => {
+      if (event.target === $("eventViewerBackdrop")) closeEventViewer();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !$("eventViewerBackdrop").hidden) closeEventViewer();
+    });
 
     function safeId(value) {
       return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -727,6 +778,7 @@
           saveCapacity.disabled = true;
           try {
             await calendarRequest("POST", {action:"setCapacity", eventId:event.id, capacity});
+            closeEventViewer();
             showCalendarNotice("Registration limit updated.", "success");
             await loadCalendar();
           } catch (error) { showCalendarNotice(error.message, "error"); }
@@ -744,6 +796,7 @@
       button.disabled = true;
       try {
         await calendarRequest("POST", {action, eventId});
+        closeEventViewer();
         showCalendarNotice(action === "signup" ? "You are registered for this event." : "You have withdrawn from this event.", "success");
         await loadCalendar();
       } catch (error) {
