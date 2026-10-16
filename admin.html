@@ -207,15 +207,21 @@
       date.className = "muted";
       date.textContent = `${eventDateLabel(event.dateKey)} · ${eventTimeLabel(event)}`;
       const registration = event.registration || {};
-      const limit = registration.capacity == null
-        ? `${registration.registeredCount || 0} registered · Unlimited`
-        : `${registration.registeredCount || 0} / ${registration.capacity} registered`;
-      const roster = document.createElement("p");
-      roster.className = "muted";
       const attendees = Array.isArray(registration.registrations)
         ? registration.registrations
         : [];
-      roster.textContent = `Signups: ${limit} · Paid: ${registration.paidCount || 0} / ${registration.paidStaffCount || 0} · Volunteers: ${registration.volunteerCount || 0}` +
+      const limit = registration.capacity == null
+        ? `${registration.registeredCount || 0} registered · Unlimited`
+        : `${registration.registeredCount || 0} / ${registration.capacity} registered`;
+      const paidCount = attendees.filter(person => person.staffType === "paid").length;
+      const paidStaffCount = Math.max(
+        Number.isSafeInteger(registration.paidStaffCount) ? registration.paidStaffCount : 0,
+        paidCount
+      );
+      const volunteerCount = attendees.length - paidCount;
+      const roster = document.createElement("p");
+      roster.className = "muted";
+      roster.textContent = `Signups: ${limit} · Paid: ${paidCount} / ${paidStaffCount} · Volunteers: ${volunteerCount}` +
         (attendees.length
           ? ` · ${attendees.map(person => `${person.name || person.username || "Staff member"} (${person.staffType === "paid" ? "Paid staff" : "Volunteer"})`).join(", ")}`
           : "");

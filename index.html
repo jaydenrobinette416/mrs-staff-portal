@@ -895,8 +895,14 @@
       const roster = document.createElement("div");
       roster.className = "attendee-list";
       const capText = registration.capacity == null ? "No registration limit" : `${registration.registeredCount || attendees.length} / ${registration.capacity} registered`;
+      const paidCount = attendees.filter(person => person.staffType === "paid").length;
+      const paidStaffCount = Math.max(
+        Number.isSafeInteger(registration.paidStaffCount) ? registration.paidStaffCount : 0,
+        paidCount
+      );
+      const volunteerCount = attendees.length - paidCount;
       const rosterHeading = document.createElement("strong");
-      rosterHeading.textContent = `Attendance: ${capText} · Paid: ${registration.paidCount || 0} / ${registration.paidStaffCount || 0} · Volunteers: ${registration.volunteerCount || 0}`;
+      rosterHeading.textContent = `Attendance: ${capText} · Paid: ${paidCount} / ${paidStaffCount} · Volunteers: ${volunteerCount}`;
       roster.appendChild(rosterHeading);
       const names = document.createElement("div");
       names.style.marginTop = "6px";
