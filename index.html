@@ -121,6 +121,14 @@
 
     .calendar-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:18px 0; }
     .calendar-toolbar h3 { margin:0; font-size:20px; }
+    .event-editor { margin:16px 0; padding:18px; border:1px solid #dfe6ef; border-radius:9px; background:#f7f9fc; }
+    .event-editor h3 { margin:0 0 14px; }
+    .event-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
+    .event-form-grid .full-width { grid-column:1 / -1; }
+    .event-editor textarea { display:block; width:100%; min-height:95px; padding:12px; border:1px solid #bdc9d8; border-radius:7px; margin:7px 0 14px; font:inherit; resize:vertical; }
+    .event-editor input[type="checkbox"] { display:inline-block; width:auto; margin:0 7px 0 0; }
+    .event-editor .checkbox-label { display:flex; align-items:center; margin:3px 0 14px; }
+    .event-editor-actions { display:flex; gap:8px; flex-wrap:wrap; }
     .calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border-top:1px solid #dfe6ef; border-left:1px solid #dfe6ef; border-radius:8px; overflow:hidden; }
     .calendar-weekday { padding:10px 3px; text-align:center; font-size:12px; font-weight:700; color:#52637a; background:#f2f5fa; border-right:1px solid #dfe6ef; border-bottom:1px solid #dfe6ef; }
     .calendar-day { min-width:0; min-height:92px; padding:6px; background:#fff; border-right:1px solid #dfe6ef; border-bottom:1px solid #dfe6ef; }
@@ -154,7 +162,7 @@
     .event-viewer .event-details-toggle { display:none; }
     .event-viewer .event-details-content[hidden] { display:block; }
     @media (max-width:650px) { .event-viewer-backdrop { padding:8px; align-items:flex-end; } .event-viewer { max-height:92vh; padding:16px; border-radius:14px 14px 8px 8px; } }
-    @media (max-width:650px) { .calendar-day { min-height:65px; padding:3px; } .calendar-weekday { font-size:10px; padding:7px 1px; } .day-number { width:21px; height:21px; } .calendar-event-chip { font-size:9px; padding:3px; } .calendar-work-names { font-size:9px; padding:2px 2px 0; } }
+    @media (max-width:650px) { .calendar-day { min-height:65px; padding:3px; } .calendar-weekday { font-size:10px; padding:7px 1px; } .day-number { width:21px; height:21px; } .calendar-event-chip { font-size:9px; padding:3px; } .calendar-work-names { font-size:9px; padding:2px 2px 0; } .event-form-grid { grid-template-columns:1fr; } .event-form-grid .full-width { grid-column:auto; } }
 
     .admin-user {
       border-top: 1px solid #e2e7ee;
@@ -330,8 +338,55 @@
             <h2>Football Standby Calendar</h2>
             <p class="muted">View upcoming events, sign up, and see who's attending.</p>
           </div>
-          <button id="refreshCalendarButton" class="secondary" type="button">Refresh Calendar</button>
+          <div class="event-actions">
+            <button id="addCalendarEventButton" class="hidden" type="button">Add Event</button>
+            <button id="refreshCalendarButton" class="secondary" type="button">Refresh Calendar</button>
+          </div>
         </div>
+        <section id="eventEditor" class="event-editor hidden" aria-labelledby="eventEditorTitle">
+          <h3 id="eventEditorTitle">Add calendar event</h3>
+          <form id="eventEditorForm">
+            <div class="event-form-grid">
+              <div class="full-width">
+                <label for="eventTitleInput">Event name</label>
+                <input id="eventTitleInput" maxlength="120" required>
+              </div>
+              <div>
+                <label for="eventDateInput">Date</label>
+                <input id="eventDateInput" type="date" required>
+              </div>
+              <div>
+                <label class="checkbox-label" for="eventAllDayInput">
+                  <input id="eventAllDayInput" type="checkbox"> All-day event
+                </label>
+              </div>
+              <div>
+                <label for="eventStartInput">Start time</label>
+                <input id="eventStartInput" type="time" required>
+              </div>
+              <div>
+                <label for="eventEndInput">End time</label>
+                <input id="eventEndInput" type="time" required>
+              </div>
+              <div>
+                <label for="eventLocationInput">Location</label>
+                <input id="eventLocationInput" maxlength="200">
+              </div>
+              <div>
+                <label for="eventCapacityInput">Registration limit</label>
+                <input id="eventCapacityInput" type="number" min="0" max="10000" placeholder="Unlimited">
+              </div>
+              <div class="full-width">
+                <label for="eventDescriptionInput">Description</label>
+                <textarea id="eventDescriptionInput" maxlength="2000"></textarea>
+              </div>
+            </div>
+            <div class="event-editor-actions">
+              <button id="eventEditorSubmit" type="submit">Create Event</button>
+              <button id="cancelEventEditorButton" class="secondary" type="button">Cancel</button>
+            </div>
+          </form>
+        </section>
         <div id="calendarStatus" class="calendar-status" role="status">Loading calendar events…</div>
         <div class="calendar-toolbar">
           <button class="secondary" id="previousMonthButton" type="button">‹ Previous</button>
@@ -368,6 +423,7 @@
     let calendarMonth = calendarToday.getMonth();
     let calendarEvents = [];
     let currentPortalUser = null;
+    let editingCalendarEventId = null;
 
     function showNotice(message, type = "") {
       const notice = $("notice");
@@ -519,6 +575,7 @@
       $("accountPanel").classList.remove("hidden");
 
       $("adminLink").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
+      $("addCalendarEventButton").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
       currentPortalUser = user;
       loadCalendar();
     }
@@ -569,7 +626,16 @@
 
     function eventTimeLabel(event) {
       if (event.allDay || event.startTime === "All day") return "All day";
-      if (event.startTime) return event.endTime ? `${event.startTime} – ${event.endTime}` : event.startTime;
+      const formatTime = value => {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value || "")) return value;
+        const [hour, minute] = value.split(":").map(Number);
+        return new Date(2000, 0, 1, hour, minute)
+          .toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+      };
+      if (event.startTime) {
+        const start = formatTime(event.startTime);
+        return event.endTime ? `${start} – ${formatTime(event.endTime)}` : start;
+      }
       const start = event.start ? new Date(event.start) : null;
       return start && !Number.isNaN(start.getTime())
         ? start.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}) : "Time not specified";
@@ -584,8 +650,8 @@
         calendarEvents = Array.isArray(data.events) ? data.events : [];
         renderCalendar();
         status.textContent = calendarEvents.length
-          ? `${calendarEvents.length} upcoming event${calendarEvents.length === 1 ? "" : "s"} loaded.`
-          : "No upcoming events were returned by Google Calendar.";
+          ? `${calendarEvents.length} event${calendarEvents.length === 1 ? "" : "s"} loaded.`
+          : "No events have been added to the calendar yet.";
         $("calendarGrid").classList.remove("hidden");
       } catch (error) {
         status.textContent = "Calendar could not load: " + error.message;
@@ -674,6 +740,84 @@
       document.body.style.overflow = "";
     }
 
+    function openEventEditor(event = null) {
+      const form = $("eventEditorForm");
+      form.reset();
+      editingCalendarEventId = event ? event.id : null;
+      $("eventEditorTitle").textContent = event ? "Edit calendar event" : "Add calendar event";
+      $("eventEditorSubmit").textContent = event ? "Save Changes" : "Create Event";
+      $("eventTitleInput").value = event?.title || "";
+      $("eventDateInput").value = eventDateKey(event || {});
+      $("eventAllDayInput").checked = event?.allDay === true;
+      $("eventStartInput").value = event?.startTime || "";
+      $("eventEndInput").value = event?.endTime || "";
+      $("eventLocationInput").value = event?.location || "";
+      $("eventDescriptionInput").value = event?.description || "";
+      $("eventCapacityInput").value = event?.registration?.capacity ?? "";
+      updateEventTimeInputs();
+      $("eventEditor").classList.remove("hidden");
+      $("eventEditor").scrollIntoView({behavior:"smooth", block:"start"});
+      $("eventTitleInput").focus({preventScroll:true});
+    }
+
+    function closeEventEditor() {
+      $("eventEditor").classList.add("hidden");
+      $("eventEditorForm").reset();
+      editingCalendarEventId = null;
+      updateEventTimeInputs();
+    }
+
+    function updateEventTimeInputs() {
+      const allDay = $("eventAllDayInput").checked;
+      $("eventStartInput").disabled = allDay;
+      $("eventEndInput").disabled = allDay;
+      $("eventStartInput").required = !allDay;
+      $("eventEndInput").required = !allDay;
+    }
+
+    $("addCalendarEventButton").addEventListener("click", () => openEventEditor());
+    $("cancelEventEditorButton").addEventListener("click", closeEventEditor);
+    $("eventAllDayInput").addEventListener("change", updateEventTimeInputs);
+    $("eventEditorForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const capacityInput = $("eventCapacityInput").value.trim();
+      const capacity = capacityInput === "" ? null : Number(capacityInput);
+      if (capacity !== null && (!Number.isInteger(capacity) || capacity < 0 || capacity > 10000)) {
+        showCalendarNotice("Enter a whole-number capacity from 0 to 10000, or leave blank for unlimited.", "error");
+        return;
+      }
+
+      const button = $("eventEditorSubmit");
+      button.disabled = true;
+      const isEditing = Boolean(editingCalendarEventId);
+      button.textContent = isEditing ? "Saving..." : "Creating...";
+      const payload = {
+        action: isEditing ? "updateEvent" : "createEvent",
+        title: $("eventTitleInput").value.trim(),
+        dateKey: $("eventDateInput").value,
+        allDay: $("eventAllDayInput").checked,
+        startTime: $("eventStartInput").value,
+        endTime: $("eventEndInput").value,
+        location: $("eventLocationInput").value.trim(),
+        description: $("eventDescriptionInput").value.trim(),
+        capacity
+      };
+      if (isEditing) payload.eventId = editingCalendarEventId;
+
+      try {
+        await calendarRequest("POST", payload);
+        closeEventEditor();
+        closeEventViewer();
+        showCalendarNotice(isEditing ? "Event updated." : "Event created.", "success");
+        await loadCalendar();
+      } catch (error) {
+        showCalendarNotice(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = isEditing ? "Save Changes" : "Create Event";
+      }
+    });
+
     $("closeEventViewerButton").addEventListener("click", closeEventViewer);
     $("eventViewerBackdrop").addEventListener("click", event => {
       if (event.target === $("eventViewerBackdrop")) closeEventViewer();
@@ -760,6 +904,36 @@
       actions.appendChild(signButton);
 
       if (currentPortalUser && String(currentPortalUser.role || "").toLowerCase() === "admin") {
+        const editEvent = document.createElement("button");
+        editEvent.type = "button";
+        editEvent.className = "secondary";
+        editEvent.textContent = "Edit Event";
+        editEvent.addEventListener("click", () => {
+          closeEventViewer();
+          openEventEditor(event);
+        });
+        actions.appendChild(editEvent);
+
+        const deleteEvent = document.createElement("button");
+        deleteEvent.type = "button";
+        deleteEvent.className = "danger";
+        deleteEvent.textContent = "Delete Event";
+        deleteEvent.addEventListener("click", async () => {
+          if (!window.confirm("Delete this event and all of its registrations? This cannot be undone.")) return;
+          deleteEvent.disabled = true;
+          try {
+            await calendarRequest("POST", {action:"deleteEvent", eventId:event.id});
+            closeEventViewer();
+            showCalendarNotice("Event and its registrations deleted.", "success");
+            await loadCalendar();
+          } catch (error) {
+            showCalendarNotice(error.message, "error");
+          } finally {
+            deleteEvent.disabled = false;
+          }
+        });
+        actions.appendChild(deleteEvent);
+
         const capacityInput = document.createElement("input");
         capacityInput.className = "capacity-input";
         capacityInput.type = "number"; capacityInput.min = "0"; capacityInput.max = "10000";

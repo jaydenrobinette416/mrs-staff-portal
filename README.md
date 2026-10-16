@@ -1,9 +1,19 @@
 # Maiden Rescue Squad Staff Portal
 
-Starter repository for the staff portal.
+- `index.html` — staff portal, login, and standalone event calendar
+- `api/` — Vercel serverless endpoints for accounts, sessions, and calendar registrations
 
-- `index.html` — static website for GitHub Pages
-- `api/health.js` — first Vercel serverless API endpoint
+## Calendar
+
+Calendar events are stored in the portal's MongoDB database in the `calendarEvents`
+collection. Approved administrators can create, edit, and delete events from the
+calendar; approved staff can sign up, withdraw, and view attendee lists. Signup
+capacity and registrations are stored in the `eventSettings` and `registrations`
+collections. No Google Calendar connection is used.
+
+Events and signup rosters previously supplied by Google Calendar are not
+imported automatically. Re-create events that should remain on the portal;
+staff will need to sign up for those new events.
 
 ## GitHub Pages
 1. Open repository **Settings → Pages**.
@@ -16,4 +26,6 @@ Starter repository for the staff portal.
 3. Deploy. Vercel should detect `api/health.js` as `/api/health`.
 4. Open `https://YOUR-VERCEL-PROJECT.vercel.app/api/health` to test it.
 
-Never put database credentials or secrets in this repository. MongoDB will be connected later using Vercel Environment Variables.
+Never put database credentials or secrets in this repository. Configure
+`MONGODB_URI` and `SESSION_SECRET` in the API deployment's environment variables;
+the calendar uses the same MongoDB database as staff accounts.

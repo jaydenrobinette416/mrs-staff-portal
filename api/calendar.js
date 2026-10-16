@@ -129,8 +129,70 @@ function getBody(req) {
 function validEventId(value) {
   return (
     typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= 500
+    /^[a-f\d]{24}$/i.test(value)
+  );
+}
+
+function validateEvent(body) {
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const dateKey = typeof body.dateKey === "string" ? body.dateKey : "";
+  const location = typeof body.location === "string" ? body.location.trim() : "";
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  const allDay = body.allDay === true;
+  const startTime = typeof body.startTime === "string" ? body.startTime : "";
+  const endTime = typeof body.endTime === "string" ? body.endTime : "";
+
+  if (!title || title.length > 120) {
+    return { error: "Event title is required and must be 120 characters or fewer." };
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return { error: "Enter a valid event date." };
+  }
+
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return { error: "Enter a valid event date." };
+  }
+
+  if (location.length > 200 || description.length > 2000) {
+    return { error: "Location must be 200 characters or fewer and description 2000 characters or fewer." };
+  }
+
+  if (
+    typeof body.allDay !== "boolean" ||
+    (!allDay && (
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) ||
+      startTime >= endTime
+    ))
+  ) {
+    return { error: "Choose a valid start and end time, or mark the event as all day." };
+  }
+
+  return {
+    event: {
+      title,
+      dateKey,
+      location,
+      description,
+      allDay,
+      startTime: allDay ? "" : startTime,
+      endTime: allDay ? "" : endTime
+    }
+  };
+}
+
+function validCapacity(capacity) {
+  return capacity === null || (
+    Number.isSafeInteger(capacity) &&
+    capacity >= 0 &&
+    capacity <= 10000
   );
 }
 
@@ -154,6 +216,16 @@ async function ensureIndexes(db) {
       name: "one_settings_document_per_event"
     }
   );
+
+  await db.collection("calendarEvents").createIndex(
+    { id: 1 },
+    {
+      unique: true,
+      name: "one_calendar_event_id"
+    }
+  );
+
+  await db.collection("calendarEvents").createIndex({ dateKey: 1 });
 }
 
 async function ensureEventSettings(db, eventId) {
@@ -187,6 +259,16 @@ async function registerUser(
 
   try {
     await session.withTransaction(async () => {
+      const event = await db.collection("calendarEvents").findOne(
+        { id: eventId },
+        { session, projection: { _id: 1 } }
+      );
+
+      if (!event) {
+        outcome = "not-found";
+        return;
+      }
+
       const existing = await registrations.findOne(
         {
           eventId,
@@ -287,23 +369,7 @@ async function withdrawUser(db, eventId, userId) {
   }
 }
 
-async function getEventRoster(db, eventId) {
-  const [settings, registrations] = await Promise.all([
-    db.collection("eventSettings").findOne({ eventId }),
-
-    db.collection("registrations")
-      .find({ eventId })
-      .sort({ createdAt: 1 })
-      .project({
-        userId: 1,
-        name: 1,
-        username: 1,
-        createdAt: 1,
-        addedByAdmin: 1
-      })
-      .toArray()
-  ]);
-
+function formatEventRoster(eventId, settings, registrations) {
   const capacity = settings?.capacity ?? null;
 
   return {
@@ -326,47 +392,79 @@ async function getEventRoster(db, eventId) {
   };
 }
 
+async function getEventRoster(db, eventId) {
+  const [settings, registrations] = await Promise.all([
+    db.collection("eventSettings").findOne({ eventId }),
+
+    db.collection("registrations")
+      .find({ eventId })
+      .sort({ createdAt: 1 })
+      .project({
+        userId: 1,
+        name: 1,
+        username: 1,
+        createdAt: 1,
+        addedByAdmin: 1
+      })
+      .toArray()
+  ]);
+
+  return formatEventRoster(eventId, settings, registrations);
+}
+
 async function getCalendarEvents(db) {
-  const bridgeUrl = process.env.GOOGLE_CALENDAR_BRIDGE_URL;
-  const bridgeSecret = process.env.PORTAL_API_SECRET;
+  const storedEvents = await db.collection("calendarEvents")
+    .find({})
+    .sort({ dateKey: 1, startTime: 1 })
+    .limit(500)
+    .toArray();
 
-  if (!bridgeUrl || !bridgeSecret) {
-    throw new Error("Calendar integration is not configured.");
+  const eventIds = storedEvents.map(event => event.id);
+  const [settings, registrations] = await Promise.all([
+    db.collection("eventSettings")
+      .find({ eventId: { $in: eventIds } })
+      .toArray(),
+    db.collection("registrations")
+      .find({ eventId: { $in: eventIds } })
+      .sort({ eventId: 1, createdAt: 1 })
+      .project({
+        eventId: 1,
+        userId: 1,
+        name: 1,
+        username: 1,
+        createdAt: 1,
+        addedByAdmin: 1
+      })
+      .toArray()
+  ]);
+
+  const settingsByEventId = new Map(
+    settings.map(item => [item.eventId, item])
+  );
+  const registrationsByEventId = new Map();
+  for (const registration of registrations) {
+    if (!registrationsByEventId.has(registration.eventId)) {
+      registrationsByEventId.set(registration.eventId, []);
+    }
+    registrationsByEventId.get(registration.eventId).push(registration);
   }
 
-  const url = new URL(bridgeUrl);
-  url.searchParams.set("action", "events");
-  url.searchParams.set("secret", bridgeSecret);
-
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    redirect: "follow"
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Calendar bridge returned HTTP ${response.status}`
+  return storedEvents.map(event => {
+    const roster = formatEventRoster(
+      event.id,
+      settingsByEventId.get(event.id),
+      registrationsByEventId.get(event.id) || []
     );
-  }
 
-  const data = await response.json();
-
-  if (!data.ok || !Array.isArray(data.events)) {
-    throw new Error(
-      "Calendar bridge returned an invalid response."
-    );
-  }
-
-  const events = [];
-
-  for (const event of data.events) {
-    if (!event.id) continue;
-
-    const roster = await getEventRoster(db, event.id);
-
-    events.push({
-      ...event,
-
+    return {
+      id: event.id,
+      title: event.title,
+      dateKey: event.dateKey,
+      location: event.location,
+      description: event.description,
+      allDay: event.allDay,
+      startTime: event.startTime,
+      endTime: event.endTime,
       registration: {
         capacity: roster.capacity,
         registeredCount: roster.registeredCount,
@@ -374,18 +472,8 @@ async function getCalendarEvents(db) {
         registrations: roster.registrations,
         signedUp: false
       }
-    });
-  }
-
-  return events;
-}
-
-async function calendarEventExists(eventId) {
-  const events = await getCalendarEvents(
-    await getDatabase()
-  );
-
-  return events.some(event => event.id === eventId);
+    };
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -479,6 +567,172 @@ module.exports = async function handler(req, res) {
     const action = body.action;
     const eventId = body.eventId;
 
+    const adminActions = [
+      "createEvent",
+      "updateEvent",
+      "deleteEvent",
+      "setCapacity",
+      "addAttendee",
+      "removeAttendee"
+    ];
+
+    if (adminActions.includes(action) && !isAdmin(user)) {
+      return res.status(403).json({
+        ok: false,
+        error: "Administrator permission is required."
+      });
+    }
+
+    const events = db.collection("calendarEvents");
+
+    if (action === "createEvent") {
+      const validated = validateEvent(body);
+      if (validated.error) {
+        return res.status(400).json({ ok: false, error: validated.error });
+      }
+
+      const capacity = body.capacity;
+      if (!validCapacity(capacity)) {
+        return res.status(400).json({
+          ok: false,
+          error: "Capacity must be a whole number from 0 to 10000, or null for unlimited."
+        });
+      }
+
+      const id = new ObjectId().toString();
+      const now = new Date();
+      await events.insertOne({
+        id,
+        ...validated.event,
+        createdAt: now,
+        updatedAt: now,
+        updatedBy: user._id.toString()
+      });
+      await ensureEventSettings(db, id);
+      await db.collection("eventSettings").updateOne(
+        { eventId: id },
+        { $set: { capacity, updatedAt: now, updatedBy: user._id.toString() } }
+      );
+
+      return res.status(201).json({
+        ok: true,
+        message: "Event created.",
+        eventId: id
+      });
+    }
+
+    if (action === "updateEvent") {
+      if (!validEventId(eventId)) {
+        return res.status(400).json({
+          ok: false,
+          error: "A valid event ID is required."
+        });
+      }
+
+      const validated = validateEvent(body);
+      if (validated.error) {
+        return res.status(400).json({ ok: false, error: validated.error });
+      }
+
+      const update = {
+        $set: {
+          ...validated.event,
+          updatedAt: new Date(),
+          updatedBy: user._id.toString()
+        }
+      };
+
+      if (Object.prototype.hasOwnProperty.call(body, "capacity")) {
+        if (!validCapacity(body.capacity)) {
+          return res.status(400).json({
+            ok: false,
+            error: "Capacity must be a whole number from 0 to 10000, or null for unlimited."
+          });
+        }
+
+        await ensureEventSettings(db, eventId);
+        const current = await db.collection("eventSettings")
+          .findOne({ eventId });
+        if (
+          body.capacity !== null &&
+          body.capacity < (current.registeredCount || 0)
+        ) {
+          return res.status(409).json({
+            ok: false,
+            error: "Capacity cannot be lower than the current number of registrations."
+          });
+        }
+      }
+
+      const result = await events.updateOne({ id: eventId }, update);
+      if (result.matchedCount !== 1) {
+        return res.status(404).json({
+          ok: false,
+          error: "That event could not be found on the calendar."
+        });
+      }
+
+      if (Object.prototype.hasOwnProperty.call(body, "capacity")) {
+        await db.collection("eventSettings").updateOne(
+          { eventId },
+          {
+            $set: {
+              capacity: body.capacity,
+              updatedAt: new Date(),
+              updatedBy: user._id.toString()
+            }
+          }
+        );
+      }
+
+      return res.status(200).json({
+        ok: true,
+        message: "Event updated."
+      });
+    }
+
+    if (action === "deleteEvent") {
+      if (!validEventId(eventId)) {
+        return res.status(400).json({
+          ok: false,
+          error: "A valid event ID is required."
+        });
+      }
+
+      const session = db.client.startSession();
+      let deleted = false;
+      try {
+        await session.withTransaction(async () => {
+          const result = await events.deleteOne({ id: eventId }, { session });
+          if (result.deletedCount !== 1) return;
+
+          await db.collection("registrations").deleteMany(
+            { eventId },
+            { session }
+          );
+          await db.collection("eventSettings").deleteOne(
+            { eventId },
+            { session }
+          );
+          deleted = true;
+        });
+      } finally {
+        await session.endSession();
+      }
+
+      if (!deleted) {
+        return res.status(404).json({
+          ok: false,
+          error: "That event could not be found on the calendar."
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        message: "Event and its registrations deleted."
+      });
+    }
+
     if (!validEventId(eventId)) {
       return res.status(400).json({
         ok: false,
@@ -486,17 +740,23 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const exists = await calendarEventExists(eventId);
-
+    const exists = await events.findOne({ id: eventId }, { projection: { _id: 1 } });
     if (!exists) {
       return res.status(404).json({
         ok: false,
-        error: "That event could not be found on the squad calendar."
+        error: "That event could not be found on the calendar."
       });
     }
 
     if (action === "signup") {
       const result = await registerUser(db, eventId, user);
+
+      if (result === "not-found") {
+        return res.status(404).json({
+          ok: false,
+          error: "That event could not be found on the calendar."
+        });
+      }
 
       if (result === "full") {
         return res.status(409).json({
@@ -544,24 +804,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (!isAdmin(user)) {
-      return res.status(403).json({
-        ok: false,
-        error: "Administrator permission is required."
-      });
-    }
-
     if (action === "setCapacity") {
       const capacity = body.capacity;
 
-      if (
-        capacity !== null &&
-        (
-          !Number.isSafeInteger(capacity) ||
-          capacity < 0 ||
-          capacity > 10000
-        )
-      ) {
+      if (!validCapacity(capacity)) {
         return res.status(400).json({
           ok: false,
           error: "Capacity must be a whole number from 0 to 10000, or null for unlimited."
@@ -630,6 +876,13 @@ module.exports = async function handler(req, res) {
         targetUser,
         true
       );
+
+      if (result === "not-found") {
+        return res.status(404).json({
+          ok: false,
+          error: "That event could not be found on the calendar."
+        });
+      }
 
       if (result === "full") {
         return res.status(409).json({
