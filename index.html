@@ -477,7 +477,8 @@
           <textarea id="resourceDescription" maxlength="1000"></textarea>
           <div id="resourceLinkFields">
             <label for="resourceUrl">Web address</label>
-            <input id="resourceUrl" type="url" maxlength="2048" placeholder="https://example.com" required>
+            <input id="resourceUrl" type="text" inputmode="url" maxlength="2048" placeholder="emrs.catawbacountync.gov" required>
+            <p class="muted">Enter a domain or full web address. If you leave off https://, it will be added automatically.</p>
           </div>
           <div id="resourceFileFields" class="hidden">
             <label for="resourceFile">File (maximum 3 MB)</label>
@@ -715,11 +716,22 @@
         options.body = JSON.stringify(body);
       }
 
-      const response = await fetch(API_BASE + "/api/resources", options);
+      let response;
+      try {
+        response = await fetch(API_BASE + "/api/resources", options);
+      } catch {
+        if (window.location.protocol === "file:") {
+          throw new Error("This local file preview cannot connect to the portal API. Open the hosted staff portal instead.");
+        }
+        throw new Error("Could not connect to the resources API. Check that the API is online and the portal is using the correct API address.");
+      }
       let result;
       try {
         result = await response.json();
       } catch {
+        if (response.status === 404) {
+          throw new Error("The resources API is not deployed yet. Deploy api/resources.js with the other API routes, then try again.");
+        }
         throw new Error("The resources API returned an unexpected response.");
       }
       if (!response.ok || !result.ok) {

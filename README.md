@@ -17,7 +17,9 @@ an independent cap. No Google Calendar connection is used.
 
 Approved staff can browse shared web links and download uploaded files.
 Administrators can add links, upload files, and delete resources from the Staff
-Resources section. Uploaded files are stored in MongoDB GridFS in the
+Resources section. Link addresses can be entered as a domain (for example,
+`emrs.catawbacountync.gov`) or a full `http://`/`https://` address; `https://`
+is added automatically when omitted. Uploaded files are stored in MongoDB GridFS in the
 `resourceFiles` bucket; resource details are stored in the `resources`
 collection. Uploads are limited to 3 MB and supported PDF, Office, text, CSV,
 JPEG, PNG, and WebP files.
