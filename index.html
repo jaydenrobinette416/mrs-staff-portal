@@ -94,6 +94,17 @@
       background: white;
     }
 
+    select {
+      display:block;
+      width:100%;
+      padding:12px;
+      border:1px solid #bdc9d8;
+      border-radius:7px;
+      margin:7px 0 14px;
+      font:inherit;
+      background:white;
+    }
+
     input:focus {
       outline: 2px solid #7298c9;
       outline-offset: 1px;
@@ -150,6 +161,18 @@
     .event-details-content[hidden] { display:none; }
     .calendar-list-item { border-top:1px solid #e2e7ee; padding:16px 0; }
     .calendar-list-item:first-child { border-top:0; }
+    .resource-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:12px; }
+    .resource-item { min-width:0; padding:16px; border:1px solid #dfe6ef; border-radius:9px; background:#fff; }
+    .resource-item h3 { margin:0 0 7px; overflow-wrap:anywhere; }
+    .resource-item p { margin:6px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .resource-item-link { display:inline-block; margin-top:8px; font-weight:700; color:#1d477a; overflow-wrap:anywhere; }
+    .resource-item-actions { display:flex; gap:8px; margin-top:12px; }
+    .resource-item-actions button { flex:1; }
+    .resource-form { margin:16px 0; padding:18px; border:1px solid #dfe6ef; border-radius:9px; background:#f7f9fc; }
+    .resource-form textarea { display:block; width:100%; min-height:85px; padding:12px; border:1px solid #bdc9d8; border-radius:7px; margin:7px 0 14px; font:inherit; resize:vertical; }
+    .resource-form input[type="file"] { padding:9px; }
+    .resource-form-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .resource-status { padding:12px 0; color:#657387; }
     .event-meta { color:#52637a; font-size:13px; line-height:1.6; margin:6px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
     .attendee-list { background:#f7f9fc; border-radius:7px; padding:10px 13px; margin:10px 0; font-size:13px; }
     .event-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
@@ -172,6 +195,7 @@
       main { margin:16px auto; padding:0 12px; }
       .card { padding:17px; }
       input { font-size:16px; }
+      select, textarea { font-size:16px; }
       .event-viewer-backdrop { padding:8px; align-items:flex-end; }
       .event-viewer { max-height:92vh; padding:16px; border-radius:14px 14px 8px 8px; }
       .calendar-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -187,6 +211,9 @@
       .event-editor-actions button, .event-actions button { flex:1 1 auto; min-height:44px; }
       .event-actions { gap:6px; }
       .capacity-input { width:100%; min-height:44px; }
+      .resource-form-actions button { flex:1 1 auto; }
+      .resource-item-actions { flex-direction:column; }
+      .resource-item-actions button { min-height:44px; }
       .section-heading { align-items:stretch; }
       .section-heading > .event-actions { width:100%; }
       .event-viewer-header h2 { font-size:19px; }
@@ -425,6 +452,46 @@
         <div id="calendarGrid" class="calendar-grid"></div>
       </section>
       <div id="calendarNotice" class="notice hidden" role="status" aria-live="polite"></div>
+      <section class="card" id="resourcesPanel">
+        <div class="section-heading">
+          <div>
+            <h2>Staff Resources</h2>
+            <p class="muted">Helpful links, documents, and files for the team.</p>
+          </div>
+          <div class="event-actions">
+            <button id="addResourceButton" class="hidden" type="button">Add Resource</button>
+            <button id="refreshResourcesButton" class="secondary" type="button">Refresh Resources</button>
+          </div>
+        </div>
+        <div id="resourceNotice" class="notice hidden" role="status" aria-live="polite"></div>
+        <form id="resourceForm" class="resource-form hidden">
+          <h3 id="resourceFormTitle">Add a resource</h3>
+          <label for="resourceKind">Resource type</label>
+          <select id="resourceKind" required>
+            <option value="link">Web link</option>
+            <option value="file">Upload a file</option>
+          </select>
+          <label for="resourceTitle">Title</label>
+          <input id="resourceTitle" maxlength="120" required>
+          <label for="resourceDescription">Description (optional)</label>
+          <textarea id="resourceDescription" maxlength="1000"></textarea>
+          <div id="resourceLinkFields">
+            <label for="resourceUrl">Web address</label>
+            <input id="resourceUrl" type="url" maxlength="2048" placeholder="https://example.com" required>
+          </div>
+          <div id="resourceFileFields" class="hidden">
+            <label for="resourceFile">File (maximum 3 MB)</label>
+            <input id="resourceFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.webp">
+            <p class="muted">Supported: PDF, Office documents, text, CSV, and JPG/PNG/WebP images.</p>
+          </div>
+          <div class="resource-form-actions">
+            <button id="saveResourceButton" type="submit">Add Resource</button>
+            <button id="cancelResourceButton" class="secondary" type="button">Cancel</button>
+          </div>
+        </form>
+        <div id="resourceStatus" class="resource-status" role="status">Loading resources…</div>
+        <div id="resourceList" class="resource-list" aria-live="polite"></div>
+      </section>
       <div id="eventViewerBackdrop" class="event-viewer-backdrop" hidden>
         <section class="event-viewer" role="dialog" aria-modal="true" aria-labelledby="eventViewerTitle">
           <div class="event-viewer-header">
@@ -603,8 +670,10 @@
 
       $("adminLink").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
       $("addCalendarEventButton").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
+      $("addResourceButton").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
       currentPortalUser = user;
       loadCalendar();
+      loadResources();
     }
 
     function showCalendarNotice(message, type = "") {
@@ -633,6 +702,233 @@
       }
       return result;
     }
+
+    async function resourceRequest(method = "GET", body = null) {
+      const options = {
+        method,
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Accept": "application/json" }
+      };
+      if (body) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+
+      const response = await fetch(API_BASE + "/api/resources", options);
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error("The resources API returned an unexpected response.");
+      }
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Unable to process the resources request.");
+      }
+      return result;
+    }
+
+    function formatFileSize(bytes) {
+      if (!Number.isFinite(bytes) || bytes < 0) return "";
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function renderResources(resources) {
+      const list = $("resourceList");
+      list.replaceChildren();
+      if (!resources.length) {
+        const empty = document.createElement("p");
+        empty.className = "muted";
+        empty.textContent = "No resources have been added yet.";
+        list.appendChild(empty);
+        return;
+      }
+
+      for (const resource of resources) {
+        const card = document.createElement("article");
+        card.className = "resource-item";
+        const title = document.createElement("h3");
+        title.textContent = resource.title || "Untitled resource";
+        const type = document.createElement("p");
+        type.className = "muted";
+        type.textContent = resource.kind === "file"
+          ? `${resource.fileName || "Uploaded file"} · ${formatFileSize(resource.fileSize)}`
+          : "Web link";
+        card.append(title, type);
+
+        if (resource.description) {
+          const description = document.createElement("p");
+          description.textContent = resource.description;
+          card.appendChild(description);
+        }
+
+        const link = document.createElement("a");
+        link.className = "resource-item-link";
+        if (resource.kind === "file") {
+          link.href = API_BASE + "/api/resources?download=" + encodeURIComponent(resource.id);
+          link.textContent = "Download file";
+          link.setAttribute("download", resource.fileName || "");
+        } else {
+          link.href = resource.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Open resource";
+        }
+        card.appendChild(link);
+
+        if (currentPortalUser && String(currentPortalUser.role || "").toUpperCase() === "ADMIN") {
+          const actions = document.createElement("div");
+          actions.className = "resource-item-actions";
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "danger";
+          remove.textContent = "Delete Resource";
+          remove.addEventListener("click", () => deleteResource(resource, remove));
+          actions.appendChild(remove);
+          card.appendChild(actions);
+        }
+        list.appendChild(card);
+      }
+    }
+
+    async function loadResources() {
+      const status = $("resourceStatus");
+      const refresh = $("refreshResourcesButton");
+      status.textContent = "Loading resources…";
+      refresh.disabled = true;
+      hideResourceNotice();
+      try {
+        const result = await resourceRequest();
+        const resources = Array.isArray(result.resources) ? result.resources : [];
+        status.textContent = `${resources.length} resource${resources.length === 1 ? "" : "s"}.`;
+        renderResources(resources);
+      } catch (error) {
+        status.textContent = "Resources could not be loaded.";
+        $("resourceList").replaceChildren();
+        showResourceNotice(error.message, "error");
+      } finally {
+        refresh.disabled = false;
+      }
+    }
+
+    function showResourceNotice(message, type = "") {
+      const notice = $("resourceNotice");
+      notice.textContent = message;
+      notice.className = "notice" + (type ? " " + type : "");
+    }
+
+    function hideResourceNotice() {
+      $("resourceNotice").textContent = "";
+      $("resourceNotice").className = "notice hidden";
+    }
+
+    function updateResourceFields() {
+      const isFile = $("resourceKind").value === "file";
+      $("resourceLinkFields").classList.toggle("hidden", isFile);
+      $("resourceFileFields").classList.toggle("hidden", !isFile);
+      $("resourceUrl").required = !isFile;
+      $("resourceFile").required = isFile;
+    }
+
+    function closeResourceForm() {
+      $("resourceForm").reset();
+      $("resourceForm").classList.add("hidden");
+      hideResourceNotice();
+      updateResourceFields();
+    }
+
+    async function deleteResource(resource, button) {
+      if (!window.confirm(`Delete "${resource.title || "this resource"}"? This cannot be undone.`)) return;
+      button.disabled = true;
+      try {
+        const result = await resourceRequest("POST", {
+          action: "deleteResource",
+          resourceId: resource.id
+        });
+        await loadResources();
+        showResourceNotice(result.message || "Resource deleted.", "success");
+      } catch (error) {
+        showResourceNotice(error.message, "error");
+        button.disabled = false;
+      }
+    }
+
+    $("addResourceButton").addEventListener("click", () => {
+      $("resourceForm").reset();
+      updateResourceFields();
+      hideResourceNotice();
+      $("resourceForm").classList.remove("hidden");
+      $("resourceForm").scrollIntoView({behavior:"smooth", block:"start"});
+      $("resourceKind").focus({preventScroll:true});
+    });
+    $("cancelResourceButton").addEventListener("click", closeResourceForm);
+    $("refreshResourcesButton").addEventListener("click", loadResources);
+    $("resourceKind").addEventListener("change", updateResourceFields);
+    $("resourceForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      hideResourceNotice();
+      const submit = $("saveResourceButton");
+      const isFile = $("resourceKind").value === "file";
+      const title = $("resourceTitle").value.trim();
+      const description = $("resourceDescription").value.trim();
+      let payload;
+
+      if (isFile) {
+        const file = $("resourceFile").files[0];
+        if (!file) {
+          showResourceNotice("Choose a file to upload.", "error");
+          return;
+        }
+        if (file.size > 3 * 1024 * 1024) {
+          showResourceNotice("Files must be no larger than 3 MB.", "error");
+          return;
+        }
+
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.addEventListener("load", () => resolve(reader.result));
+            reader.addEventListener("error", () => reject(new Error("Unable to read the selected file.")));
+            reader.readAsDataURL(file);
+          });
+          const encoded = String(dataUrl).split(",", 2)[1];
+          payload = {
+            action: "uploadFile",
+            title,
+            description,
+            fileName: file.name,
+            contentType: file.type || "",
+            data: encoded
+          };
+        } catch (error) {
+          showResourceNotice(error.message, "error");
+          return;
+        }
+      } else {
+        payload = {
+          action: "createLink",
+          title,
+          description,
+          url: $("resourceUrl").value.trim()
+        };
+      }
+
+      submit.disabled = true;
+      submit.textContent = isFile ? "Uploading..." : "Adding...";
+      try {
+        const result = await resourceRequest("POST", payload);
+        closeResourceForm();
+        await loadResources();
+        showResourceNotice(result.message || "Resource added.", "success");
+      } catch (error) {
+        showResourceNotice(error.message, "error");
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Add Resource";
+      }
+    });
 
     function eventDate(event) {
       if (event.dateKey && /^\d{4}-\d{2}-\d{2}$/.test(event.dateKey)) {
@@ -1063,7 +1359,11 @@
         $("auth").classList.remove("hidden");
         $("accountNav").classList.add("hidden");
         $("adminLink").classList.add("hidden");
+        $("addCalendarEventButton").classList.add("hidden");
+        $("addResourceButton").classList.add("hidden");
         currentPortalUser = null;
+        closeEventEditor();
+        closeResourceForm();
         $("loginForm").reset();
         $("loginPass").value = "";
         showTab("login");
