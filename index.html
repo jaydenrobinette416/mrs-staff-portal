@@ -17,13 +17,22 @@
     body { margin: 0; }
 
     header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
       background: #12294a;
       color: white;
-      padding: 22px 5vw;
+      padding: 16px 5vw;
+      box-shadow: 0 3px 12px #10274422;
     }
 
-    header h1 { margin: 0; font-size: 24px; }
-    header p { margin: 6px 0 0; color: #cdd8e8; }
+    .site-header-inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .site-brand h1 { margin:0; font-size:24px; }
+    .site-brand p { margin:6px 0 0; color:#cdd8e8; }
+    .header-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+    .header-actions .button-link, .header-actions button { white-space:nowrap; }
+    .header-actions .button-link { background:#fff; color:#16345b; }
+    .header-actions button.secondary { background:#29496f; color:#fff; }
 
     main {
       max-width: 1100px;
@@ -54,6 +63,7 @@
       border: 0;
       border-radius: 8px;
       color: white;
+      min-height: 44px;
       padding: 11px 16px;
       font-weight: 600;
       font: inherit;
@@ -113,12 +123,6 @@
     .error { background: #ffe8e8; color: #82212b; }
     .success { background: #e5f5eb; color: #17603a; }
 
-    .account-row {
-      border-top: 1px solid #e2e7ee;
-      padding: 12px 0;
-      overflow-wrap: anywhere;
-    }
-
     .calendar-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:18px 0; }
     .calendar-toolbar h3 { margin:0; font-size:20px; }
     .event-editor { margin:16px 0; padding:18px; border:1px solid #dfe6ef; border-radius:9px; background:#f7f9fc; }
@@ -161,8 +165,35 @@
     .event-viewer .calendar-list-item { border:0; padding:0; }
     .event-viewer .event-details-toggle { display:none; }
     .event-viewer .event-details-content[hidden] { display:block; }
-    @media (max-width:650px) { .event-viewer-backdrop { padding:8px; align-items:flex-end; } .event-viewer { max-height:92vh; padding:16px; border-radius:14px 14px 8px 8px; } }
-    @media (max-width:650px) { .calendar-day { min-height:65px; padding:3px; } .calendar-weekday { font-size:10px; padding:7px 1px; } .day-number { width:21px; height:21px; } .calendar-event-chip { font-size:9px; padding:3px; } .calendar-work-names { font-size:9px; padding:2px 2px 0; } .event-form-grid { grid-template-columns:1fr; } .event-form-grid .full-width { grid-column:auto; } }
+    @media (max-width:650px) {
+      .site-header-inner { align-items:flex-start; flex-direction:column; gap:12px; }
+      .header-actions { width:100%; justify-content:stretch; }
+      .header-actions > * { flex:1 1 0; text-align:center; }
+      main { margin:16px auto; padding:0 12px; }
+      .card { padding:17px; }
+      input { font-size:16px; }
+      .event-viewer-backdrop { padding:8px; align-items:flex-end; }
+      .event-viewer { max-height:92vh; padding:16px; border-radius:14px 14px 8px 8px; }
+      .calendar-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+      .calendar-toolbar h3 { grid-column:1 / -1; grid-row:1; text-align:center; margin-bottom:3px; }
+      .calendar-toolbar button { min-height:44px; padding:9px 8px; }
+      .calendar-day { min-height:72px; padding:4px 2px; }
+      .calendar-weekday { font-size:10px; padding:8px 1px; }
+      .day-number { width:22px; height:22px; font-size:11px; }
+      .calendar-event-chip { min-height:30px; padding:3px 2px; font-size:9px; line-height:1.2; }
+      .calendar-day .calendar-work-names { display:none; }
+      .event-form-grid { grid-template-columns:1fr; }
+      .event-form-grid .full-width { grid-column:auto; }
+      .event-editor-actions button, .event-actions button { flex:1 1 auto; min-height:44px; }
+      .event-actions { gap:6px; }
+      .capacity-input { width:100%; min-height:44px; }
+      .section-heading { align-items:stretch; }
+      .section-heading > .event-actions { width:100%; }
+      .event-viewer-header h2 { font-size:19px; }
+      .auth-wrap { margin:16px auto; }
+      .tabs { gap:6px; }
+      .tabs button { min-height:46px; padding:10px 8px; }
+    }
 
     .admin-user {
       border-top: 1px solid #e2e7ee;
@@ -194,18 +225,30 @@
     }
 
     @media (max-width: 650px) {
-      header h1 { font-size: 20px; }
-      .card { padding: 17px; }
+      .site-brand h1 { font-size:20px; }
       .auth-wrap { margin: 20px auto; }
       .tabs button { flex: 1; }
+    }
+    @media (max-width:380px) {
+      .site-brand h1 { font-size:18px; }
+      .calendar-day { min-height:62px; }
+      .calendar-event-chip { font-size:8px; }
     }
   </style>
 </head>
 
 <body>
   <header>
-    <h1>MAIDEN RESCUE SQUAD</h1>
-    <p>Part-Time Staff Portal</p>
+    <div class="site-header-inner">
+      <div class="site-brand">
+        <h1>MAIDEN RESCUE SQUAD</h1>
+        <p>Part-Time Staff Portal</p>
+      </div>
+      <nav id="accountNav" class="header-actions hidden" aria-label="Staff account actions">
+        <a id="adminLink" class="button-link hidden" href="/admin.html">Admin Panel</a>
+        <button id="logoutButton" class="secondary" type="button">Sign Out</button>
+      </nav>
+    </div>
   </header>
 
   <main>
@@ -311,26 +354,7 @@
     </div>
 
     <div id="accountPanel" class="hidden">
-      <section class="card">
-        <h2>Staff Dashboard</h2>
-        <p class="muted">Welcome to the Maiden Rescue Squad staff portal.</p>
-
-        <div class="account-row">
-          <strong>Name:</strong> <span id="accountName"></span>
-        </div>
-        <div class="account-row">
-          <strong>Username:</strong> <span id="accountUsername"></span>
-        </div>
-        <div class="account-row">
-          <strong>Role:</strong> <span id="accountRole"></span>
-        </div>
-
-        <div class="actions">
-          <a id="adminLink" class="button-link hidden" href="/admin.html">Open Admin Panel</a>
-          <button id="logoutButton" class="secondary" type="button">Sign Out</button>
-        </div>
-        <div id="accountNotice" class="notice hidden" role="status" aria-live="polite"></div>
-      </section>
+      <div id="accountNotice" class="notice hidden" role="status" aria-live="polite"></div>
 
       <section class="card" id="calendarPanel">
         <div class="section-heading">
@@ -573,11 +597,9 @@
 
     function showAccount(user) {
       const role = user.role || "STAFF";
-      $("accountName").textContent = user.name || "Not provided";
-      $("accountUsername").textContent = user.username || "";
-      $("accountRole").textContent = role;
       $("auth").classList.add("hidden");
       $("accountPanel").classList.remove("hidden");
+      $("accountNav").classList.remove("hidden");
 
       $("adminLink").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
       $("addCalendarEventButton").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
@@ -1039,6 +1061,9 @@
 
         $("accountPanel").classList.add("hidden");
         $("auth").classList.remove("hidden");
+        $("accountNav").classList.add("hidden");
+        $("adminLink").classList.add("hidden");
+        currentPortalUser = null;
         $("loginForm").reset();
         $("loginPass").value = "";
         showTab("login");

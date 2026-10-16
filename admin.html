@@ -14,7 +14,7 @@
     header p { margin: 6px 0 0; color: #cdd8e8; }
     main { max-width: 1100px; margin: 28px auto; padding: 0 18px; }
     .card { background: white; border-radius: 13px; box-shadow: 0 5px 20px #14284a13; padding: 24px; margin-bottom: 18px; }
-    button, .button-link { cursor: pointer; background: #1d477a; border: 0; border-radius: 8px; color: white; padding: 11px 16px; font-weight: 600; font: inherit; font-size: 14px; text-decoration: none; display: inline-block; }
+    button, .button-link { cursor: pointer; background: #1d477a; border: 0; border-radius: 8px; color: white; min-height:44px; padding: 11px 16px; font-weight: 600; font: inherit; font-size: 14px; text-decoration: none; display: inline-block; }
     button.secondary, .button-link.secondary { background: #e8eef7; color: #16345b; }
     button.danger { background: #a83232; }
     button:disabled { opacity: .5; cursor: wait; }
@@ -45,7 +45,19 @@
     .checkbox-label { display:flex; align-items:center; margin:8px 0 14px; }
     .event-list-status { padding:12px 0; color:#657387; }
     footer { text-align: center; padding: 20px; color: #657387; }
-    @media (max-width: 600px) { .admin-user, .admin-event { align-items: stretch; flex-direction: column; } .card { padding: 18px; } .event-form-grid { grid-template-columns:1fr; } .event-form-grid .full-width { grid-column:auto; } }
+    @media (max-width: 600px) {
+      header { padding:18px 16px; }
+      header h1 { font-size:20px; }
+      main { margin:18px auto; padding:0 12px; }
+      .admin-user, .admin-event { align-items:stretch; flex-direction:column; }
+      .card { padding:18px; }
+      input, textarea { font-size:16px; }
+      .event-form-grid { grid-template-columns:1fr; }
+      .event-form-grid .full-width { grid-column:auto; }
+      .admin-user-actions, .admin-event-actions { width:100%; }
+      .admin-user-actions > *, .admin-event-actions > * { flex:1 1 auto; text-align:center; }
+      .event-form-actions > * { flex:1 1 auto; }
+    }
   </style>
 </head>
 <body>
