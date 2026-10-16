@@ -1,7 +1,7 @@
 # Maiden Rescue Squad Staff Portal
 
 - `index.html` — staff portal, login, and standalone event calendar
-- `api/` — Vercel serverless endpoints for accounts, sessions, and calendar registrations
+- `api/` — Vercel serverless endpoints for accounts, sessions, calendar registrations, resources, and announcements
 
 ## Calendar
 
@@ -23,6 +23,12 @@ is added automatically when omitted. Uploaded files are stored in MongoDB GridFS
 `resourceFiles` bucket; resource details are stored in the `resources`
 collection. Uploads are limited to 3 MB and supported PDF, Office, text, CSV,
 JPEG, PNG, and WebP files.
+
+## Announcements
+
+Approved staff can view the 100 most recent announcements. Administrators can
+post announcements with a title and message, and delete announcements. Records
+are stored in the `announcements` collection in the portal MongoDB database.
 
 Events and signup rosters previously supplied by Google Calendar are not
 imported automatically. Re-create events that should remain on the portal;

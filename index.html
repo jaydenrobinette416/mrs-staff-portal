@@ -173,6 +173,17 @@
     .resource-form input[type="file"] { padding:9px; }
     .resource-form-actions { display:flex; gap:8px; flex-wrap:wrap; }
     .resource-status { padding:12px 0; color:#657387; }
+    .announcement-list { display:grid; gap:12px; }
+    .announcement-item { min-width:0; padding:16px; border:1px solid #dfe6ef; border-left:4px solid #1d477a; border-radius:9px; background:#fff; }
+    .announcement-item h3 { margin:0 0 5px; overflow-wrap:anywhere; }
+    .announcement-meta { margin:0 0 10px; color:#657387; font-size:13px; }
+    .announcement-message { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; }
+    .announcement-form { margin:16px 0; padding:18px; border:1px solid #dfe6ef; border-radius:9px; background:#f7f9fc; }
+    .announcement-form textarea { display:block; width:100%; min-height:110px; padding:12px; border:1px solid #bdc9d8; border-radius:7px; margin:7px 0 14px; font:inherit; resize:vertical; }
+    .announcement-form-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .announcement-actions { display:flex; gap:8px; margin-top:12px; }
+    .announcement-actions button { flex:1; }
+    .announcement-status { padding:12px 0; color:#657387; }
     .event-meta { color:#52637a; font-size:13px; line-height:1.6; margin:6px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
     .attendee-list { background:#f7f9fc; border-radius:7px; padding:10px 13px; margin:10px 0; font-size:13px; }
     .event-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
@@ -214,6 +225,8 @@
       .resource-form-actions button { flex:1 1 auto; }
       .resource-item-actions { flex-direction:column; }
       .resource-item-actions button { min-height:44px; }
+      .announcement-form-actions button { flex:1 1 auto; }
+      .announcement-actions button { min-height:44px; }
       .section-heading { align-items:stretch; }
       .section-heading > .event-actions { width:100%; }
       .event-viewer-header h2 { font-size:19px; }
@@ -269,7 +282,7 @@
     <div class="site-header-inner">
       <div class="site-brand">
         <h1>MAIDEN RESCUE SQUAD</h1>
-        <p>Part-Time Staff Portal</p>
+        <p>Staff Portal</p>
       </div>
       <nav id="accountNav" class="header-actions hidden" aria-label="Staff account actions">
         <a id="adminLink" class="button-link hidden" href="/admin.html">Admin Panel</a>
@@ -382,6 +395,33 @@
 
     <div id="accountPanel" class="hidden">
       <div id="accountNotice" class="notice hidden" role="status" aria-live="polite"></div>
+
+      <section class="card" id="announcementsPanel">
+        <div class="section-heading">
+          <div>
+            <h2>Announcements</h2>
+            <p class="muted">Important updates for the staff team.</p>
+          </div>
+          <div class="event-actions">
+            <button id="addAnnouncementButton" class="hidden" type="button">Post Announcement</button>
+            <button id="refreshAnnouncementsButton" class="secondary" type="button">Refresh Announcements</button>
+          </div>
+        </div>
+        <div id="announcementNotice" class="notice hidden" role="status" aria-live="polite"></div>
+        <form id="announcementForm" class="announcement-form hidden">
+          <h3>Post an announcement</h3>
+          <label for="announcementTitle">Title</label>
+          <input id="announcementTitle" maxlength="120" required>
+          <label for="announcementMessage">Announcement</label>
+          <textarea id="announcementMessage" maxlength="5000" required></textarea>
+          <div class="announcement-form-actions">
+            <button id="saveAnnouncementButton" type="submit">Post Announcement</button>
+            <button id="cancelAnnouncementButton" class="secondary" type="button">Cancel</button>
+          </div>
+        </form>
+        <div id="announcementStatus" class="announcement-status" role="status">Loading announcements…</div>
+        <div id="announcementList" class="announcement-list" aria-live="polite"></div>
+      </section>
 
       <section class="card" id="calendarPanel">
         <div class="section-heading">
@@ -672,10 +712,172 @@
       $("adminLink").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
       $("addCalendarEventButton").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
       $("addResourceButton").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
+      $("addAnnouncementButton").classList.toggle("hidden", role.toUpperCase() !== "ADMIN");
       currentPortalUser = user;
+      loadAnnouncements();
       loadCalendar();
       loadResources();
     }
+
+    async function announcementRequest(method = "GET", body = null) {
+      const options = {
+        method,
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Accept": "application/json" }
+      };
+      if (body) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+      let response;
+      try {
+        response = await fetch(API_BASE + "/api/announcements", options);
+      } catch {
+        throw new Error(window.location.protocol === "file:"
+          ? "This local file preview cannot connect to the portal API. Open the hosted staff portal instead."
+          : "Could not connect to the announcements API. Check that the API is online.");
+      }
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        if (response.status === 404) {
+          throw new Error("The announcements API is not deployed yet. Deploy api/announcements.js with the other API routes.");
+        }
+        throw new Error("The announcements API returned an unexpected response.");
+      }
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Unable to process the announcements request.");
+      }
+      return result;
+    }
+
+    function showAnnouncementNotice(message, type = "") {
+      const notice = $("announcementNotice");
+      notice.textContent = message;
+      notice.className = "notice" + (type ? " " + type : "");
+    }
+
+    function hideAnnouncementNotice() {
+      $("announcementNotice").textContent = "";
+      $("announcementNotice").className = "notice hidden";
+    }
+
+    function renderAnnouncements(announcements) {
+      const list = $("announcementList");
+      list.replaceChildren();
+      if (!announcements.length) {
+        const empty = document.createElement("p");
+        empty.className = "muted";
+        empty.textContent = "There are no announcements right now.";
+        list.appendChild(empty);
+        return;
+      }
+
+      for (const announcement of announcements) {
+        const card = document.createElement("article");
+        card.className = "announcement-item";
+        const title = document.createElement("h3");
+        title.textContent = announcement.title || "Announcement";
+        const meta = document.createElement("p");
+        meta.className = "announcement-meta";
+        const createdAt = new Date(announcement.createdAt);
+        const timestamp = Number.isNaN(createdAt.getTime())
+          ? ""
+          : createdAt.toLocaleString();
+        meta.textContent = [announcement.postedBy, timestamp].filter(Boolean).join(" · ");
+        const message = document.createElement("p");
+        message.className = "announcement-message";
+        message.textContent = announcement.message || "";
+        card.append(title, meta, message);
+
+        if (currentPortalUser && String(currentPortalUser.role || "").toUpperCase() === "ADMIN") {
+          const actions = document.createElement("div");
+          actions.className = "announcement-actions";
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "danger";
+          remove.textContent = "Delete Announcement";
+          remove.addEventListener("click", () => deleteAnnouncement(announcement, remove));
+          actions.appendChild(remove);
+          card.appendChild(actions);
+        }
+        list.appendChild(card);
+      }
+    }
+
+    async function loadAnnouncements() {
+      $("announcementStatus").textContent = "Loading announcements…";
+      $("refreshAnnouncementsButton").disabled = true;
+      hideAnnouncementNotice();
+      try {
+        const result = await announcementRequest();
+        const announcements = Array.isArray(result.announcements) ? result.announcements : [];
+        $("announcementStatus").textContent = `${announcements.length} announcement${announcements.length === 1 ? "" : "s"}.`;
+        renderAnnouncements(announcements);
+      } catch (error) {
+        $("announcementStatus").textContent = "Announcements could not be loaded.";
+        $("announcementList").replaceChildren();
+        showAnnouncementNotice(error.message, "error");
+      } finally {
+        $("refreshAnnouncementsButton").disabled = false;
+      }
+    }
+
+    async function deleteAnnouncement(announcement, button) {
+      if (!window.confirm(`Delete "${announcement.title || "this announcement"}"? This cannot be undone.`)) return;
+      button.disabled = true;
+      try {
+        const result = await announcementRequest("POST", {
+          action: "deleteAnnouncement",
+          announcementId: announcement.id
+        });
+        await loadAnnouncements();
+        showAnnouncementNotice(result.message || "Announcement deleted.", "success");
+      } catch (error) {
+        showAnnouncementNotice(error.message, "error");
+        button.disabled = false;
+      }
+    }
+
+    function closeAnnouncementForm() {
+      $("announcementForm").reset();
+      $("announcementForm").classList.add("hidden");
+      hideAnnouncementNotice();
+    }
+
+    $("addAnnouncementButton").addEventListener("click", () => {
+      $("announcementForm").reset();
+      hideAnnouncementNotice();
+      $("announcementForm").classList.remove("hidden");
+      $("announcementForm").scrollIntoView({behavior:"smooth", block:"start"});
+      $("announcementTitle").focus({preventScroll:true});
+    });
+    $("cancelAnnouncementButton").addEventListener("click", closeAnnouncementForm);
+    $("refreshAnnouncementsButton").addEventListener("click", loadAnnouncements);
+    $("announcementForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      hideAnnouncementNotice();
+      const button = $("saveAnnouncementButton");
+      button.disabled = true;
+      button.textContent = "Posting...";
+      try {
+        const result = await announcementRequest("POST", {
+          action: "createAnnouncement",
+          title: $("announcementTitle").value.trim(),
+          message: $("announcementMessage").value.trim()
+        });
+        closeAnnouncementForm();
+        await loadAnnouncements();
+        showAnnouncementNotice(result.message || "Announcement posted.", "success");
+      } catch (error) {
+        showAnnouncementNotice(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = "Post Announcement";
+      }
+    });
 
     function showCalendarNotice(message, type = "") {
       const el = $("calendarNotice");
@@ -1373,9 +1575,11 @@
         $("adminLink").classList.add("hidden");
         $("addCalendarEventButton").classList.add("hidden");
         $("addResourceButton").classList.add("hidden");
+        $("addAnnouncementButton").classList.add("hidden");
         currentPortalUser = null;
         closeEventEditor();
         closeResourceForm();
+        closeAnnouncementForm();
         $("loginForm").reset();
         $("loginPass").value = "";
         showTab("login");
