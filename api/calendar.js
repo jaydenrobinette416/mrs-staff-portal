@@ -1,9 +1,9 @@
 
 const { MongoClient, ObjectId } = require("mongodb");
 const crypto = require("crypto");
+const { setCorsHeaders } = require("./_cors");
 
 const SESSION_COOKIE = "mrs_session";
-const ALLOWED_ORIGIN = "https://portal.maidenrescuesquad.org";
 
 let cachedClient = global.portalCalendarMongoClient;
 
@@ -196,6 +196,10 @@ function validCapacity(capacity) {
   );
 }
 
+function validPaidStaffCount(count) {
+  return Number.isSafeInteger(count) && count >= 0 && count <= 10000;
+}
+
 async function ensureIndexes(db) {
   await db.collection("registrations").createIndex(
     { eventId: 1, userId: 1 },
@@ -235,6 +239,7 @@ async function ensureEventSettings(db, eventId) {
       $setOnInsert: {
         eventId,
         capacity: null,
+        paidStaffCount: 0,
         registeredCount: 0,
         updatedAt: new Date()
       }
@@ -371,23 +376,29 @@ async function withdrawUser(db, eventId, userId) {
 
 function formatEventRoster(eventId, settings, registrations) {
   const capacity = settings?.capacity ?? null;
+  const paidStaffCount = settings?.paidStaffCount ?? 0;
+  const paidCount = Math.min(paidStaffCount, registrations.length);
 
   return {
     eventId,
     capacity,
     registeredCount: registrations.length,
+    paidStaffCount,
+    paidCount,
+    volunteerCount: registrations.length - paidCount,
 
     spotsRemaining: capacity === null
       ? null
       : Math.max(0, capacity - registrations.length),
 
-    registrations: registrations.map(registration => ({
+    registrations: registrations.map((registration, index) => ({
       id: registration._id.toString(),
       userId: registration.userId,
       name: registration.name,
       username: registration.username,
       createdAt: registration.createdAt,
-      addedByAdmin: registration.addedByAdmin === true
+      addedByAdmin: registration.addedByAdmin === true,
+      staffType: index < paidStaffCount ? "paid" : "volunteer"
     }))
   };
 }
@@ -398,7 +409,7 @@ async function getEventRoster(db, eventId) {
 
     db.collection("registrations")
       .find({ eventId })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1, _id: 1 })
       .project({
         userId: 1,
         name: 1,
@@ -426,7 +437,7 @@ async function getCalendarEvents(db) {
       .toArray(),
     db.collection("registrations")
       .find({ eventId: { $in: eventIds } })
-      .sort({ eventId: 1, createdAt: 1 })
+      .sort({ eventId: 1, createdAt: 1, _id: 1 })
       .project({
         eventId: 1,
         userId: 1,
@@ -477,33 +488,14 @@ async function getCalendarEvents(db) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    ALLOWED_ORIGIN
-  );
-
-  res.setHeader(
-    "Access-Control-Allow-Methods",
+  const originAllowed = setCorsHeaders(
+    req,
+    res,
     "GET, POST, OPTIONS"
   );
-
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type"
-  );
-
-  res.setHeader(
-    "Access-Control-Allow-Credentials",
-    "true"
-  );
-
-  res.setHeader("Vary", "Origin");
   res.setHeader("Cache-Control", "no-store");
 
-  if (
-    req.headers.origin &&
-    req.headers.origin !== ALLOWED_ORIGIN
-  ) {
+  if (!originAllowed) {
     return res.status(403).json({
       ok: false,
       error: "Origin not allowed."
@@ -572,6 +564,7 @@ module.exports = async function handler(req, res) {
       "updateEvent",
       "deleteEvent",
       "setCapacity",
+      "setPaidStaffCount",
       "addAttendee",
       "removeAttendee"
     ];
@@ -598,6 +591,13 @@ module.exports = async function handler(req, res) {
           error: "Capacity must be a whole number from 0 to 10000, or null for unlimited."
         });
       }
+      const paidStaffCount = body.paidStaffCount ?? 0;
+      if (!validPaidStaffCount(paidStaffCount)) {
+        return res.status(400).json({
+          ok: false,
+          error: "Paid staff slots must be a whole number from 0 to 10000."
+        });
+      }
 
       const id = new ObjectId().toString();
       const now = new Date();
@@ -611,7 +611,14 @@ module.exports = async function handler(req, res) {
       await ensureEventSettings(db, id);
       await db.collection("eventSettings").updateOne(
         { eventId: id },
-        { $set: { capacity, updatedAt: now, updatedBy: user._id.toString() } }
+        {
+          $set: {
+            capacity,
+            paidStaffCount,
+            updatedAt: now,
+            updatedBy: user._id.toString()
+          }
+        }
       );
 
       return res.status(201).json({
@@ -649,8 +656,26 @@ module.exports = async function handler(req, res) {
             error: "Capacity must be a whole number from 0 to 10000, or null for unlimited."
           });
         }
+      }
 
+      if (
+        Object.prototype.hasOwnProperty.call(body, "paidStaffCount") &&
+        !validPaidStaffCount(body.paidStaffCount)
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: "Paid staff slots must be a whole number from 0 to 10000."
+        });
+      }
+
+      if (
+        Object.prototype.hasOwnProperty.call(body, "capacity") ||
+        Object.prototype.hasOwnProperty.call(body, "paidStaffCount")
+      ) {
         await ensureEventSettings(db, eventId);
+      }
+
+      if (Object.prototype.hasOwnProperty.call(body, "capacity")) {
         const current = await db.collection("eventSettings")
           .findOne({ eventId });
         if (
@@ -672,12 +697,19 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      const settingsUpdate = {};
       if (Object.prototype.hasOwnProperty.call(body, "capacity")) {
+        settingsUpdate.capacity = body.capacity;
+      }
+      if (Object.prototype.hasOwnProperty.call(body, "paidStaffCount")) {
+        settingsUpdate.paidStaffCount = body.paidStaffCount;
+      }
+      if (Object.keys(settingsUpdate).length) {
         await db.collection("eventSettings").updateOne(
           { eventId },
           {
             $set: {
-              capacity: body.capacity,
+              ...settingsUpdate,
               updatedAt: new Date(),
               updatedBy: user._id.toString()
             }
@@ -834,6 +866,33 @@ module.exports = async function handler(req, res) {
         {
           $set: {
             capacity,
+            updatedAt: new Date(),
+            updatedBy: user._id.toString()
+          }
+        }
+      );
+
+      return res.status(200).json({
+        ok: true,
+        registration: await getEventRoster(db, eventId)
+      });
+    }
+
+    if (action === "setPaidStaffCount") {
+      const paidStaffCount = body.paidStaffCount;
+      if (!validPaidStaffCount(paidStaffCount)) {
+        return res.status(400).json({
+          ok: false,
+          error: "Paid staff slots must be a whole number from 0 to 10000."
+        });
+      }
+
+      await ensureEventSettings(db, eventId);
+      await db.collection("eventSettings").updateOne(
+        { eventId },
+        {
+          $set: {
+            paidStaffCount,
             updatedAt: new Date(),
             updatedBy: user._id.toString()
           }

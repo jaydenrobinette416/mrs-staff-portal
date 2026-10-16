@@ -2,6 +2,7 @@
 const { MongoClient } = require("mongodb");
 const crypto = require("crypto");
 const { promisify } = require("util");
+const { setCorsHeaders } = require("./_cors");
 
 const scrypt = promisify(crypto.scrypt);
 let cachedClient = global.portalRegisterClient;
@@ -23,13 +24,15 @@ async function getDatabase() {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "https://portal.maidenrescuesquad.org"
-  );
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Vary", "Origin");
+  const originAllowed = setCorsHeaders(req, res, "POST, OPTIONS");
+  res.setHeader("Cache-Control", "no-store");
+
+  if (!originAllowed) {
+    return res.status(403).json({
+      ok: false,
+      message: "Origin not allowed."
+    });
+  }
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();

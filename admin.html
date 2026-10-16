@@ -29,8 +29,23 @@
     .admin-user h3 { margin: 0 0 6px; }
     .admin-user p { margin: 4px 0; }
     .admin-user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    input, textarea { width:100%; padding:11px; border:1px solid #bdc9d8; border-radius:7px; margin:6px 0 14px; font:inherit; }
+    textarea { min-height:90px; resize:vertical; }
+    label { display:block; font-weight:600; }
+    input[type="checkbox"] { width:auto; margin-right:7px; }
+    .event-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
+    .event-form-grid .full-width { grid-column:1 / -1; }
+    .event-form-actions, .admin-event-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .admin-event { display:flex; justify-content:space-between; gap:16px; align-items:center; padding:16px 0; border-top:1px solid #e2e8f0; }
+    .admin-event:first-child { border-top:0; }
+    .admin-event h3 { margin:0 0 5px; }
+    .admin-event p { margin:4px 0; }
+    .event-editor { padding:18px; margin:16px 0; border-radius:9px; background:#f7f9fc; border:1px solid #dfe6ef; }
+    .event-editor h3 { margin:0 0 14px; }
+    .checkbox-label { display:flex; align-items:center; margin:8px 0 14px; }
+    .event-list-status { padding:12px 0; color:#657387; }
     footer { text-align: center; padding: 20px; color: #657387; }
-    @media (max-width: 600px) { .admin-user { align-items: stretch; flex-direction: column; } .card { padding: 18px; } }
+    @media (max-width: 600px) { .admin-user, .admin-event { align-items: stretch; flex-direction: column; } .card { padding: 18px; } .event-form-grid { grid-template-columns:1fr; } .event-form-grid .full-width { grid-column:auto; } }
   </style>
 </head>
 <body>
@@ -52,16 +67,311 @@
         <div id="adminNotice" class="notice hidden" role="status" aria-live="polite"></div>
         <div id="pendingList" aria-live="polite"><p class="muted">Loading pending accounts...</p></div>
       </section>
-      <section class="card"><h2>More Admin Tools</h2><p class="muted">This page is the home for future administrative functions. Additional tools can be added here as they are built.</p></section>
+      <section class="card" aria-labelledby="calendarHeading">
+        <div class="section-heading">
+          <div><h2 id="calendarHeading">Calendar Events</h2><p class="muted">Create and manage staff events, signup limits, and attendee rosters.</p></div>
+          <div class="admin-user-actions">
+            <button id="newEventButton" type="button">Add Event</button>
+            <button id="refreshEventsButton" class="secondary" type="button">Refresh Events</button>
+          </div>
+        </div>
+        <div id="eventNotice" class="notice hidden" role="status" aria-live="polite"></div>
+        <section id="eventEditor" class="event-editor hidden" aria-labelledby="eventEditorHeading">
+          <h3 id="eventEditorHeading">Add calendar event</h3>
+          <form id="eventForm">
+            <div class="event-form-grid">
+              <div class="full-width">
+                <label for="eventTitle">Event name</label>
+                <input id="eventTitle" maxlength="120" required>
+              </div>
+              <div>
+                <label for="eventDate">Date</label>
+                <input id="eventDate" type="date" required>
+              </div>
+              <div>
+                <label class="checkbox-label" for="eventAllDay"><input id="eventAllDay" type="checkbox"> All-day event</label>
+              </div>
+              <div>
+                <label for="eventStart">Start time</label>
+                <input id="eventStart" type="time" required>
+              </div>
+              <div>
+                <label for="eventEnd">End time</label>
+                <input id="eventEnd" type="time" required>
+              </div>
+              <div>
+                <label for="eventLocation">Location</label>
+                <input id="eventLocation" maxlength="200">
+              </div>
+              <div>
+                <label for="eventCapacity">Registration limit</label>
+                <input id="eventCapacity" type="number" min="0" max="10000" placeholder="Unlimited">
+              </div>
+              <div>
+                <label for="eventPaidStaff">Paid staff slots</label>
+                <input id="eventPaidStaff" type="number" min="0" max="10000" value="0" required>
+                <p class="muted">First signups fill paid slots; later signups are volunteers.</p>
+              </div>
+              <div class="full-width">
+                <label for="eventDescription">Description</label>
+                <textarea id="eventDescription" maxlength="2000"></textarea>
+              </div>
+            </div>
+            <div class="event-form-actions">
+              <button id="saveEventButton" type="submit">Create Event</button>
+              <button id="cancelEventButton" class="secondary" type="button">Cancel</button>
+            </div>
+          </form>
+        </section>
+        <div id="eventListStatus" class="event-list-status" role="status">Loading events...</div>
+        <div id="eventList" aria-live="polite"></div>
+      </section>
     </div>
   </main>
   <footer>Maiden Rescue Squad &copy; <span id="year"></span></footer>
 <script>
   const API_BASE = "https://api.maidenrescuesquad.org";
   const $ = id => document.getElementById(id);
+  let calendarEvents = [];
+  let editingEventId = null;
   $("year").textContent = new Date().getFullYear();
   function notice(id, message, type = "") { const el = $(id); el.textContent = message; el.className = "notice" + (type ? " " + type : ""); }
   function hideNotice(id) { $(id).textContent = ""; $(id).className = "notice hidden"; }
+
+  async function calendarRequest(method = "GET", body = null) {
+    const options = {
+      method,
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    };
+    if (body) {
+      options.headers["Content-Type"] = "application/json";
+      options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(API_BASE + "/api/calendar", options);
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("The calendar API returned an unexpected response.");
+    }
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || result.message || "Unable to process the calendar request.");
+    }
+    return result;
+  }
+
+  function eventDateLabel(dateKey) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey || "")) return "Date unavailable";
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  function eventTimeLabel(event) {
+    if (event.allDay) return "All day";
+    const format = value => {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value || "")) return value || "";
+      const [hours, minutes] = value.split(":").map(Number);
+      return new Date(2000, 0, 1, hours, minutes)
+        .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    };
+    return [format(event.startTime), format(event.endTime)].filter(Boolean).join(" – ") || "Time not specified";
+  }
+
+  function renderCalendarEvents() {
+    const list = $("eventList");
+    list.replaceChildren();
+    if (!calendarEvents.length) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "No events have been added yet. Use Add Event to create one.";
+      list.appendChild(empty);
+      return;
+    }
+
+    for (const event of calendarEvents) {
+      const row = document.createElement("article");
+      row.className = "admin-event";
+
+      const details = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = event.title || "Untitled event";
+      const date = document.createElement("p");
+      date.className = "muted";
+      date.textContent = `${eventDateLabel(event.dateKey)} · ${eventTimeLabel(event)}`;
+      const registration = event.registration || {};
+      const limit = registration.capacity == null
+        ? `${registration.registeredCount || 0} registered · Unlimited`
+        : `${registration.registeredCount || 0} / ${registration.capacity} registered`;
+      const roster = document.createElement("p");
+      roster.className = "muted";
+      const attendees = Array.isArray(registration.registrations)
+        ? registration.registrations
+        : [];
+      roster.textContent = `Signups: ${limit} · Paid: ${registration.paidCount || 0} / ${registration.paidStaffCount || 0} · Volunteers: ${registration.volunteerCount || 0}` +
+        (attendees.length
+          ? ` · ${attendees.map(person => `${person.name || person.username || "Staff member"} (${person.staffType === "paid" ? "Paid staff" : "Volunteer"})`).join(", ")}`
+          : "");
+      details.append(title, date);
+      if (event.location) {
+        const location = document.createElement("p");
+        location.className = "muted";
+        location.textContent = `Location: ${event.location}`;
+        details.appendChild(location);
+      }
+      details.appendChild(roster);
+      if (event.description) {
+        const description = document.createElement("p");
+        description.textContent = event.description;
+        details.appendChild(description);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "admin-event-actions";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "secondary";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => openEventEditor(event));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "danger";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", () => deleteCalendarEvent(event, remove));
+      actions.append(edit, remove);
+      row.append(details, actions);
+      list.appendChild(row);
+    }
+  }
+
+  async function loadCalendarEvents() {
+    const status = $("eventListStatus");
+    const refresh = $("refreshEventsButton");
+    status.textContent = "Loading events...";
+    refresh.disabled = true;
+    hideNotice("eventNotice");
+    try {
+      const result = await calendarRequest();
+      calendarEvents = Array.isArray(result.events) ? result.events : [];
+      status.textContent = `${calendarEvents.length} event${calendarEvents.length === 1 ? "" : "s"} found.`;
+      renderCalendarEvents();
+    } catch (error) {
+      calendarEvents = [];
+      $("eventList").replaceChildren();
+      status.textContent = "Events could not be loaded.";
+      notice("eventNotice", error.message, "error");
+    } finally {
+      refresh.disabled = false;
+    }
+  }
+
+  function updateEventTimeFields() {
+    const allDay = $("eventAllDay").checked;
+    $("eventStart").disabled = allDay;
+    $("eventEnd").disabled = allDay;
+    $("eventStart").required = !allDay;
+    $("eventEnd").required = !allDay;
+  }
+
+  function closeEventEditor() {
+    $("eventEditor").classList.add("hidden");
+    $("eventForm").reset();
+    editingEventId = null;
+    updateEventTimeFields();
+  }
+
+  function openEventEditor(event = null) {
+    $("eventForm").reset();
+    editingEventId = event ? event.id : null;
+    $("eventEditorHeading").textContent = event ? "Edit calendar event" : "Add calendar event";
+    $("saveEventButton").textContent = event ? "Save Changes" : "Create Event";
+    $("eventTitle").value = event?.title || "";
+    $("eventDate").value = event?.dateKey || "";
+    $("eventAllDay").checked = event?.allDay === true;
+    $("eventStart").value = event?.startTime || "";
+    $("eventEnd").value = event?.endTime || "";
+    $("eventLocation").value = event?.location || "";
+    $("eventCapacity").value = event?.registration?.capacity ?? "";
+    $("eventPaidStaff").value = event?.registration?.paidStaffCount ?? 0;
+    $("eventDescription").value = event?.description || "";
+    updateEventTimeFields();
+    hideNotice("eventNotice");
+    $("eventEditor").classList.remove("hidden");
+    $("eventEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("eventTitle").focus({ preventScroll: true });
+  }
+
+  async function deleteCalendarEvent(event, button) {
+    if (!window.confirm(`Delete "${event.title || "this event"}" and all its signups? This cannot be undone.`)) return;
+    button.disabled = true;
+    try {
+      const result = await calendarRequest("POST", {
+        action: "deleteEvent",
+        eventId: event.id
+      });
+      await loadCalendarEvents();
+      notice("eventNotice", result.message || "Event deleted.", "success");
+    } catch (error) {
+      notice("eventNotice", error.message, "error");
+      button.disabled = false;
+    }
+  }
+
+  $("newEventButton").addEventListener("click", () => openEventEditor());
+  $("refreshEventsButton").addEventListener("click", loadCalendarEvents);
+  $("cancelEventButton").addEventListener("click", closeEventEditor);
+  $("eventAllDay").addEventListener("change", updateEventTimeFields);
+  $("eventForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const rawCapacity = $("eventCapacity").value.trim();
+    const capacity = rawCapacity === "" ? null : Number(rawCapacity);
+    if (capacity !== null && (!Number.isInteger(capacity) || capacity < 0 || capacity > 10000)) {
+      notice("eventNotice", "Registration limit must be a whole number from 0 to 10000, or blank for unlimited.", "error");
+      return;
+    }
+    const paidStaffCount = Number($("eventPaidStaff").value);
+    if (!Number.isInteger(paidStaffCount) || paidStaffCount < 0 || paidStaffCount > 10000) {
+      notice("eventNotice", "Paid staff slots must be a whole number from 0 to 10000.", "error");
+      return;
+    }
+
+    const saving = $("saveEventButton");
+    const isEditing = Boolean(editingEventId);
+    saving.disabled = true;
+    saving.textContent = isEditing ? "Saving..." : "Creating...";
+    const payload = {
+      action: isEditing ? "updateEvent" : "createEvent",
+      title: $("eventTitle").value.trim(),
+      dateKey: $("eventDate").value,
+      allDay: $("eventAllDay").checked,
+      startTime: $("eventStart").value,
+      endTime: $("eventEnd").value,
+      location: $("eventLocation").value.trim(),
+      description: $("eventDescription").value.trim(),
+      capacity,
+      paidStaffCount
+    };
+    if (isEditing) payload.eventId = editingEventId;
+
+    try {
+      const result = await calendarRequest("POST", payload);
+      closeEventEditor();
+      await loadCalendarEvents();
+      notice("eventNotice", result.message || (isEditing ? "Event updated." : "Event created."), "success");
+    } catch (error) {
+      notice("eventNotice", error.message, "error");
+    } finally {
+      saving.disabled = false;
+      saving.textContent = isEditing ? "Save Changes" : "Create Event";
+    }
+  });
 
   async function loadPendingAccounts() {
     const list = $("pendingList"), refresh = $("refreshPendingButton");
@@ -107,7 +417,7 @@
       if (!response.ok || !result.authenticated || !result.user) { $("checkingCard").classList.add("hidden"); $("deniedCard").classList.remove("hidden"); return; }
       if (result.user.role !== "ADMIN") { $("checkingCard").classList.add("hidden"); $("deniedMessage").textContent = "Your account is signed in, but it does not have administrator privileges."; $("deniedCard").classList.remove("hidden"); return; }
       $("adminName").textContent = result.user.name || result.user.username || "Administrator";
-      $("checkingCard").classList.add("hidden"); $("adminContent").classList.remove("hidden"); await loadPendingAccounts();
+      $("checkingCard").classList.add("hidden"); $("adminContent").classList.remove("hidden"); await Promise.all([loadPendingAccounts(), loadCalendarEvents()]);
     } catch (error) { $("checkingCard").classList.add("hidden"); $("deniedMessage").textContent = "Could not verify your session. Return to the Staff Portal and sign in again."; $("deniedCard").classList.remove("hidden"); }
   }
   $("logoutButton").addEventListener("click", async () => {

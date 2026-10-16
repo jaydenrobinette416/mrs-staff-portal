@@ -2,6 +2,7 @@
 const { MongoClient } = require("mongodb");
 const crypto = require("crypto");
 const { promisify } = require("util");
+const { setCorsHeaders } = require("./_cors");
 
 const scrypt = promisify(crypto.scrypt);
 const SESSION_COOKIE = "mrs_session";
@@ -45,16 +46,10 @@ function signSession(payload) {
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = "https://portal.maidenrescuesquad.org";
-
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Vary", "Origin");
+  const originAllowed = setCorsHeaders(req, res, "POST, OPTIONS");
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.headers.origin && req.headers.origin !== allowedOrigin) {
+  if (!originAllowed) {
     return res.status(403).json({
       ok: false,
       message: "Origin not allowed."

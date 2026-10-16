@@ -1,9 +1,9 @@
 
 const { MongoClient, ObjectId } = require("mongodb");
 const crypto = require("crypto");
+const { setCorsHeaders } = require("./_cors");
 
 const SESSION_COOKIE = "mrs_session";
-const ALLOWED_ORIGIN = "https://portal.maidenrescuesquad.org";
 
 let cachedClient = global.portalAdminMongoClient;
 
@@ -84,14 +84,14 @@ function verifySession(token) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Vary", "Origin");
+  const originAllowed = setCorsHeaders(
+    req,
+    res,
+    "GET, POST, OPTIONS"
+  );
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.headers.origin && req.headers.origin !== ALLOWED_ORIGIN) {
+  if (!originAllowed) {
     return res.status(403).json({
       ok: false,
       message: "Origin not allowed."

@@ -376,6 +376,11 @@
                 <label for="eventCapacityInput">Registration limit</label>
                 <input id="eventCapacityInput" type="number" min="0" max="10000" placeholder="Unlimited">
               </div>
+              <div>
+                <label for="eventPaidStaffInput">Paid staff slots</label>
+                <input id="eventPaidStaffInput" type="number" min="0" max="10000" value="0" required>
+                <small class="muted">First signups fill paid slots; later signups are volunteers.</small>
+              </div>
               <div class="full-width">
                 <label for="eventDescriptionInput">Description</label>
                 <textarea id="eventDescriptionInput" maxlength="2000"></textarea>
@@ -705,7 +710,7 @@
           const attendees = Array.isArray(registration.registrations) ? registration.registrations : [];
           const names = document.createElement("div");
           names.className = "calendar-work-names";
-          names.textContent = attendees.length ? attendees.map(person => person.name || person.username || "Staff member").join(", ") : "No staff listed";
+          names.textContent = attendees.length ? attendees.map(person => `${person.name || person.username || "Staff member"} (${person.staffType === "paid" ? "Paid" : "Volunteer"})`).join(", ") : "No staff listed";
           names.title = attendees.length ? "Staff signed up for this event" : "No staff registrations listed";
           wrap.appendChild(names);
           cell.appendChild(wrap);
@@ -754,6 +759,7 @@
       $("eventLocationInput").value = event?.location || "";
       $("eventDescriptionInput").value = event?.description || "";
       $("eventCapacityInput").value = event?.registration?.capacity ?? "";
+      $("eventPaidStaffInput").value = event?.registration?.paidStaffCount ?? 0;
       updateEventTimeInputs();
       $("eventEditor").classList.remove("hidden");
       $("eventEditor").scrollIntoView({behavior:"smooth", block:"start"});
@@ -786,6 +792,11 @@
         showCalendarNotice("Enter a whole-number capacity from 0 to 10000, or leave blank for unlimited.", "error");
         return;
       }
+      const paidStaffCount = Number($("eventPaidStaffInput").value);
+      if (!Number.isInteger(paidStaffCount) || paidStaffCount < 0 || paidStaffCount > 10000) {
+        showCalendarNotice("Paid staff slots must be a whole number from 0 to 10000.", "error");
+        return;
+      }
 
       const button = $("eventEditorSubmit");
       button.disabled = true;
@@ -800,7 +811,8 @@
         endTime: $("eventEndInput").value,
         location: $("eventLocationInput").value.trim(),
         description: $("eventDescriptionInput").value.trim(),
-        capacity
+        capacity,
+        paidStaffCount
       };
       if (isEditing) payload.eventId = editingCalendarEventId;
 
@@ -868,7 +880,7 @@
       const summaryNames = document.createElement("div");
       summaryNames.className = "calendar-work-names";
       summaryNames.style.padding = "4px 0 0";
-      summaryNames.textContent = attendees.length ? "Working: " + attendees.map(person => person.name || person.username || "Staff member").join(", ") : "Working: No staff listed";
+      summaryNames.textContent = attendees.length ? "Working: " + attendees.map(person => `${person.name || person.username || "Staff member"} (${person.staffType === "paid" ? "Paid" : "Volunteer"})`).join(", ") : "Working: No staff listed";
       card.appendChild(summary);
       card.appendChild(summaryNames);
 
@@ -884,11 +896,11 @@
       roster.className = "attendee-list";
       const capText = registration.capacity == null ? "No registration limit" : `${registration.registeredCount || attendees.length} / ${registration.capacity} registered`;
       const rosterHeading = document.createElement("strong");
-      rosterHeading.textContent = `Attendance: ${capText}`;
+      rosterHeading.textContent = `Attendance: ${capText} · Paid: ${registration.paidCount || 0} / ${registration.paidStaffCount || 0} · Volunteers: ${registration.volunteerCount || 0}`;
       roster.appendChild(rosterHeading);
       const names = document.createElement("div");
       names.style.marginTop = "6px";
-      names.textContent = attendees.length ? attendees.map(person => person.name || person.username || "Staff member").join(", ") : "No one has signed up yet.";
+      names.textContent = attendees.length ? attendees.map(person => `${person.name || person.username || "Staff member"} (${person.staffType === "paid" ? "Paid staff" : "Volunteer"})`).join(", ") : "No one has signed up yet.";
       roster.appendChild(names);
       details.appendChild(roster);
 

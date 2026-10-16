@@ -9,7 +9,9 @@ Calendar events are stored in the portal's MongoDB database in the `calendarEven
 collection. Approved administrators can create, edit, and delete events from the
 calendar; approved staff can sign up, withdraw, and view attendee lists. Signup
 capacity and registrations are stored in the `eventSettings` and `registrations`
-collections. No Google Calendar connection is used.
+collections. Event paid staff slots are filled by signup order; additional
+registrations are labeled as volunteers. The overall registration limit remains
+an independent cap. No Google Calendar connection is used.
 
 Events and signup rosters previously supplied by Google Calendar are not
 imported automatically. Re-create events that should remain on the portal;
