@@ -3,6 +3,12 @@
 - `index.html` — staff portal, login, and standalone event calendar
 - `api/` — Vercel serverless endpoints for accounts, sessions, calendar registrations, resources, and announcements
 
+## Favicon
+
+Both the staff portal and admin page use `favicon.png` from the project root.
+Add your PNG image there using that filename; a square image at 32 × 32 pixels
+or larger is recommended.
+
 ## Calendar
 
 Calendar events are stored in the portal's MongoDB database in the `calendarEvents`

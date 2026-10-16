@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#12294a">
+  <link rel="icon" type="image/png" href="./favicon.png">
   <title>Maiden Rescue Squad | Staff Portal</title>
   <style>
     :root {
@@ -596,13 +597,21 @@
 
       if (includeCredentials) options.credentials = "include";
 
-      const response = await fetch(API_BASE + endpoint, options);
+      let response;
+      try {
+        response = await fetch(API_BASE + endpoint, options);
+      } catch {
+        if (window.location.protocol === "file:") {
+          throw new Error("This local file cannot contact the portal API. Open https://portal.maidenrescuesquad.org on your phone.");
+        }
+        throw new Error("Could not connect to the portal API. Check your internet connection and open the portal at https://portal.maidenrescuesquad.org.");
+      }
 
       let result;
       try {
         result = await response.json();
       } catch {
-        throw new Error("The server returned an unexpected response.");
+        throw new Error("The portal API returned an unexpected response. Please try again later.");
       }
 
       return { response, result };
@@ -646,10 +655,7 @@
 
         showAccount(sessionResult.user);
       } catch (error) {
-        showNotice(
-          "Could not contact the portal API. Please try again.",
-          "error"
-        );
+        showNotice(error.message || "Could not contact the portal API. Please try again.", "error");
       } finally {
         button.disabled = false;
         button.textContent = "Sign In";
@@ -693,10 +699,7 @@
           "success"
         );
       } catch (error) {
-        showNotice(
-          "Could not contact the portal API. Please try again.",
-          "error"
-        );
+        showNotice(error.message || "Could not contact the portal API. Please try again.", "error");
       } finally {
         button.disabled = false;
         button.textContent = "Request Account";
