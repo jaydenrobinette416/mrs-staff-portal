@@ -15,9 +15,10 @@ refreshes automatically every minute.
 The display also reads base shifts from the `schedules` collection in the
 `ApparatusCheck` MongoDB database, following `schedule.js`. Base, station, or
 location labels and shift times are shown on each date; tap a base shift to
-open its detail. Employee names are returned only for an approved signed-in
-staff session. The schedule database must be accessible using the configured
-`MONGODB_URI`.
+open its detail. Compact base assignments appear above the portal standby
+events and show staff name, base, and Day/Night. Employee names are returned
+only for an approved signed-in staff session. The schedule database must be
+accessible using the configured `MONGODB_URI`.
 
 ## Favicon
 
