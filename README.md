@@ -12,6 +12,13 @@ rosters are only returned by the API after an approved staff member signs in;
 the display includes sign-out controls for shared screens. The event display
 refreshes automatically every minute.
 
+The display also reads base shifts from the `schedules` collection in the
+`ApparatusCheck` MongoDB database, following `schedule.js`. Base, station, or
+location labels and shift times are shown on each date; tap a base shift to
+open its detail. Employee names are returned only for an approved signed-in
+staff session. The schedule database must be accessible using the configured
+`MONGODB_URI`.
+
 ## Favicon
 
 Both the staff portal and admin page use `favicon.png` from the project root.

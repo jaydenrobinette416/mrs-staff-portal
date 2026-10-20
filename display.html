@@ -89,6 +89,26 @@
     .event-title { margin: 0; font-size: 15px; line-height: 1.3; font-weight: 700; }
     .event-time { margin: 3px 0 0; color: #52637a; font-size: 13px; }
     .event-description { margin: 5px 0 0; color: #34465e; font-size: 14px; line-height: 1.35; white-space: pre-wrap; }
+    .base-shifts { margin-top: 8px; padding-top: 6px; border-top: 1px solid #dfe6ef; }
+    .base-shifts-heading { margin: 0 0 4px; color: #52637a; font-size: 12px; font-weight: 700; }
+    .base-assignment {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      margin: 4px 0;
+      padding: 6px;
+      border: 1px solid #d9e2ed;
+      border-radius: 6px;
+      color: #214b37;
+      background: #eff7f2;
+      text-align: left;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .base-assignment:hover, .base-assignment:focus-visible { outline: 2px solid #55866a; }
+    .base-assignment strong, .base-assignment span { display: block; }
+    .base-assignment span { margin-top: 2px; }
     dialog {
       width: min(680px, calc(100% - 24px));
       max-height: min(85vh, 800px);
@@ -199,8 +219,10 @@
     let displayedYear = new Date().getFullYear();
     let displayedMonth = new Date().getMonth();
     let events = [];
+    let baseShifts = [];
     let signedInUser = null;
     let selectedEventId = null;
+    let selectedBaseShift = null;
     const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
     function dateKey(year, month, day) {
@@ -313,29 +335,79 @@
           }
           cell.appendChild(item);
         }
+        const dayShifts = baseShifts.filter(shift => shift.date === key);
+        if (dayShifts.length) {
+          const baseSection = document.createElement("div");
+          baseSection.className = "base-shifts";
+          const baseHeading = document.createElement("p");
+          baseHeading.className = "base-shifts-heading";
+          baseHeading.textContent = "Base staffing";
+          baseSection.appendChild(baseHeading);
+          for (const shift of dayShifts) {
+            const assignment = document.createElement("button");
+            assignment.type = "button";
+            assignment.className = "base-assignment";
+            const baseName = document.createElement("strong");
+            baseName.textContent = shift.base || "Base";
+            const shiftDetail = document.createElement("span");
+            shiftDetail.textContent = [
+              shift.time,
+              shift.shift,
+              signedInUser ? (shift.employee || "Unassigned") : "Staff sign-in to see who is working"
+            ].filter(Boolean).join(" · ");
+            assignment.append(baseName, shiftDetail);
+            assignment.setAttribute("aria-label", `${shift.base || "Base"} staffing. Tap for details.`);
+            assignment.addEventListener("click", () => openBaseDetails(shift));
+            baseSection.appendChild(assignment);
+          }
+          cell.appendChild(baseSection);
+        }
         calendarElement.appendChild(cell);
       }
+    }
+
+    function monthKey() {
+      return `${displayedYear}-${String(displayedMonth + 1).padStart(2, "0")}`;
+    }
+
+    async function requestJson(url, serviceName) {
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: { "Accept": "application/json" },
+        cache: "no-store"
+      });
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(`The ${serviceName} service returned an unexpected response.`);
+      }
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Unable to load the calendar.");
+      }
+      return result;
     }
 
     async function loadCalendar() {
       statusElement.className = "";
       statusElement.textContent = "Updating calendar…";
       try {
-        const response = await fetch(API_BASE + "/api/display-calendar", {
-          credentials: "include",
-          headers: { "Accept": "application/json" },
-          cache: "no-store"
-        });
-        let result;
-        try {
-          result = await response.json();
-        } catch {
-          throw new Error("The calendar service returned an unexpected response.");
-        }
-        if (!response.ok || !result.ok) {
-          throw new Error(result.error || "Unable to load the calendar.");
-        }
+        const [calendarResult, baseResult] = await Promise.allSettled([
+          requestJson(API_BASE + "/api/display-calendar", "calendar"),
+          requestJson(API_BASE + "/api/display-bases?month=" + encodeURIComponent(monthKey()), "base schedule")
+        ]);
+        if (calendarResult.status === "rejected") throw calendarResult.reason;
+
+        const result = calendarResult.value;
+        const baseScheduleError = baseResult.status === "rejected"
+          ? baseResult.reason.message
+          : "";
         events = Array.isArray(result.events) ? result.events : [];
+        if (baseResult.status === "fulfilled") {
+          baseShifts = Array.isArray(baseResult.value.shifts) ? baseResult.value.shifts : [];
+        } else {
+          baseShifts = [];
+        }
         signedInUser = result.authenticated ? result.user : null;
         updateStaffControls();
         renderCalendar();
@@ -343,9 +415,14 @@
           const [year, month] = (event.dateKey || "").split("-").map(Number);
           return year === displayedYear && month === displayedMonth + 1;
         }).length;
-        statusElement.textContent = `${count} event${count === 1 ? "" : "s"} this month · updates automatically`;
+        const shiftCount = baseShifts.filter(shift => String(shift.date || "").slice(0, 7) === monthKey()).length;
+        statusElement.textContent =
+          `${count} event${count === 1 ? "" : "s"} · ${shiftCount} base shift${shiftCount === 1 ? "" : "s"} this month · updates automatically` +
+          (baseScheduleError ? ` · Base schedule unavailable: ${baseScheduleError}` : "");
         if (selectedEventId && document.getElementById("eventDialog").open) {
           openEventDetails(selectedEventId);
+        } else if (selectedBaseShift && document.getElementById("eventDialog").open) {
+          openBaseDetails(selectedBaseShift);
         }
       } catch (error) {
         statusElement.className = "error";
@@ -367,6 +444,7 @@
       const event = events.find(item => item.id === eventId);
       if (!event) return;
       selectedEventId = eventId;
+      selectedBaseShift = null;
       document.getElementById("detailTitle").textContent = event.title;
       const date = new Date(`${event.dateKey}T12:00:00`);
       const dateText = Number.isNaN(date.getTime())
@@ -398,6 +476,52 @@
         const volunteers = attendees.filter(person => person.staffType === "volunteer");
         appendRosterGroup(roster, `Paid staff (${paid.length}/${event.paidStaffCount || 0})`, paid);
         appendRosterGroup(roster, `Volunteers (${volunteers.length})`, volunteers);
+      }
+      const dialog = document.getElementById("eventDialog");
+      if (!dialog.open) dialog.showModal();
+    }
+
+    function openBaseDetails(shift) {
+      selectedEventId = null;
+      selectedBaseShift = shift;
+      document.getElementById("detailTitle").textContent = shift.base || "Base staffing";
+      const date = new Date(`${shift.date}T12:00:00`);
+      const dateText = Number.isNaN(date.getTime())
+        ? shift.date
+        : date.toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric"
+        });
+      document.getElementById("detailTime").textContent =
+        [dateText, shift.time, shift.shift].filter(Boolean).join(" · ");
+      document.getElementById("detailDescription").textContent = "Base coverage assignment.";
+
+      const roster = document.getElementById("rosterSection");
+      roster.replaceChildren();
+      const heading = document.createElement("h3");
+      heading.textContent = "Who's working at this base";
+      roster.appendChild(heading);
+      if (!signedInUser) {
+        const note = document.createElement("p");
+        note.className = "roster-note";
+        note.textContent = "Sign in with an approved staff account to see the assigned employee.";
+        const signIn = document.createElement("button");
+        signIn.type = "button";
+        signIn.className = "primary-action";
+        signIn.textContent = "Staff Sign In to View Name";
+        signIn.addEventListener("click", () => document.getElementById("staffDialog").showModal());
+        roster.append(note, signIn);
+      } else {
+        const group = document.createElement("div");
+        group.className = "roster-group";
+        const label = document.createElement("h4");
+        label.textContent = "Assigned staff";
+        const name = document.createElement("p");
+        name.textContent = shift.employee || "Unassigned";
+        group.append(label, name);
+        roster.appendChild(group);
       }
       const dialog = document.getElementById("eventDialog");
       if (!dialog.open) dialog.showModal();
@@ -461,6 +585,7 @@
         await loadCalendar();
         document.getElementById("staffDialog").close();
         if (selectedEventId) openEventDetails(selectedEventId);
+        else if (selectedBaseShift) openBaseDetails(selectedBaseShift);
       } catch {
         message.textContent = "Could not contact the portal API. Check the network and try again.";
       } finally {
@@ -486,6 +611,7 @@
         document.getElementById("staffDialog").close();
         await loadCalendar();
         if (selectedEventId) openEventDetails(selectedEventId);
+        else if (selectedBaseShift) openBaseDetails(selectedBaseShift);
       } catch {
         document.getElementById("loginMessage").textContent = "Could not contact the portal API. Try again.";
       } finally {
