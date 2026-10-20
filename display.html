@@ -280,8 +280,8 @@
             const staffName = signedInUser
               ? (shift.employee || "Unassigned")
               : "Staff sign-in required";
-            assignment.textContent = `${staffName} · ${shift.base || "93"} · ${dayNight}`;
-            assignment.setAttribute("aria-label", `${staffName}, ${shift.base || "93"}, ${dayNight}. Tap for details.`);
+            assignment.textContent = `${staffName} · ${shift.base || "93:"} · ${dayNight}`;
+            assignment.setAttribute("aria-label", `${staffName}, ${shift.base || "93:"}, ${dayNight}. Tap for details.`);
             assignment.addEventListener("click", () => openBaseDetails(shift));
             baseSection.appendChild(assignment);
           }
