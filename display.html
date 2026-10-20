@@ -18,11 +18,15 @@
       align-items: center;
       justify-content: space-between;
       gap: 18px;
+      flex-wrap: wrap;
       padding: 16px 3vw;
       color: white;
       background: #12294a;
     }
     h1 { margin: 0; font-size: clamp(22px, 3vw, 34px); }
+    .staff-access { display: flex; align-items: center; gap: 10px; }
+    #staffIdentity { color: #d5dfec; font-size: 14px; }
+    #staffAccessButton { font-size: 15px; }
     .month-controls { display: flex; align-items: center; gap: 12px; }
     #monthTitle { min-width: 220px; margin: 0; text-align: center; font-size: clamp(20px, 2.8vw, 32px); }
     button {
@@ -70,17 +74,56 @@
     .day.today { background: #edf5ff; }
     .day-number { margin-bottom: 6px; font-size: 17px; font-weight: 700; }
     .event {
+      display: block;
+      width: 100%;
+      border: 0;
       margin: 5px 0;
       padding: 7px;
       border-radius: 6px;
       background: #e7effb;
       color: #183e6b;
+      text-align: left;
+      cursor: pointer;
     }
+    .event:hover, .event:focus-visible { background: #d7e6f8; outline: 3px solid #7298c9; outline-offset: 1px; }
     .event-title { margin: 0; font-size: 15px; line-height: 1.3; font-weight: 700; }
     .event-time { margin: 3px 0 0; color: #52637a; font-size: 13px; }
     .event-description { margin: 5px 0 0; color: #34465e; font-size: 14px; line-height: 1.35; white-space: pre-wrap; }
+    dialog {
+      width: min(680px, calc(100% - 24px));
+      max-height: min(85vh, 800px);
+      overflow: auto;
+      border: 0;
+      border-radius: 16px;
+      padding: 0;
+      color: #17243b;
+      box-shadow: 0 18px 60px #07182c66;
+    }
+    dialog::backdrop { background: #08182caa; }
+    .dialog-content { padding: clamp(20px, 4vw, 34px); }
+    .dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .dialog-header h2 { margin: 0; font-size: clamp(24px, 4vw, 34px); }
+    .dialog-close { flex: 0 0 auto; background: #e8eef7; }
+    .dialog-time { margin: 8px 0 18px; color: #52637a; font-size: 18px; }
+    .dialog-description { margin: 0; font-size: 18px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .roster-section { margin-top: 22px; padding: 18px; border-radius: 10px; background: #f2f5fa; }
+    .roster-section h3 { margin: 0 0 12px; font-size: 21px; }
+    .roster-group { margin-top: 12px; }
+    .roster-group h4 { margin: 0 0 5px; color: #244c7c; font-size: 16px; }
+    .roster-group p { margin: 0; font-size: 17px; line-height: 1.5; white-space: pre-wrap; }
+    .roster-note { margin: 0; color: #52637a; line-height: 1.5; }
+    .primary-action { margin-top: 14px; min-height: 52px; color: white; background: #1d477a; font-size: 17px; }
+    #staffDialog h2 { margin: 0 0 8px; font-size: 28px; }
+    #staffDialog label { display: block; margin-top: 14px; font-weight: 700; }
+    #staffDialog input { display: block; width: 100%; min-height: 52px; margin-top: 6px; padding: 12px; border: 1px solid #bdc9d8; border-radius: 8px; font: inherit; font-size: 18px; }
+    #loginMessage { min-height: 24px; margin: 12px 0 0; color: #842424; }
+    .dialog-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .dialog-actions button { flex: 1 1 180px; min-height: 52px; }
+    .button-secondary { background: #e8eef7; }
     @media (max-width: 800px) {
       header { align-items: flex-start; flex-direction: column; }
+      .staff-access { width: 100%; }
+      #staffAccessButton { flex: 1; }
       .month-controls { width: 100%; justify-content: space-between; }
       #monthTitle { min-width: 0; }
       main { padding: 10px 6px; }
@@ -92,11 +135,18 @@
       .event-time { font-size: 11px; }
       .event-description { font-size: 11px; }
     }
+    @media (pointer: coarse) {
+      .event { min-height: 58px; padding: 10px; }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Maiden Rescue Squad</h1>
+    <div class="staff-access">
+      <span id="staffIdentity" hidden></span>
+      <button id="staffAccessButton" type="button">Staff Sign In</button>
+    </div>
     <div class="month-controls">
       <button id="previousMonth" type="button" aria-label="Previous month">‹</button>
       <h2 id="monthTitle"></h2>
@@ -107,6 +157,41 @@
     <div id="status" role="status" aria-live="polite">Loading calendar…</div>
     <div id="calendar" class="calendar" aria-label="Monthly event calendar"></div>
   </main>
+  <dialog id="eventDialog" aria-labelledby="detailTitle">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <div>
+          <h2 id="detailTitle"></h2>
+          <p id="detailTime" class="dialog-time"></p>
+        </div>
+        <button class="dialog-close" type="button" data-close-dialog="eventDialog" aria-label="Close event details">Close</button>
+      </div>
+      <p id="detailDescription" class="dialog-description"></p>
+      <section id="rosterSection" class="roster-section"></section>
+    </div>
+  </dialog>
+  <dialog id="staffDialog" aria-labelledby="staffDialogTitle">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <div>
+          <h2 id="staffDialogTitle">Staff Sign In</h2>
+          <p class="roster-note">Approved staff can view the event roster.</p>
+        </div>
+        <button class="dialog-close" type="button" data-close-dialog="staffDialog" aria-label="Close sign in">Close</button>
+      </div>
+      <form id="staffLoginForm">
+        <label for="staffUsername">Username</label>
+        <input id="staffUsername" name="username" autocomplete="username" required>
+        <label for="staffPassword">Password</label>
+        <input id="staffPassword" name="password" type="password" autocomplete="current-password" required>
+        <p id="loginMessage" role="status" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button id="staffLoginButton" class="primary-action" type="submit">Sign In</button>
+          <button id="staffSignOutButton" class="button-secondary" type="button" hidden>Sign Out</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
   <script>
     const API_BASE = "https://api.maidenrescuesquad.org";
     const calendarElement = document.getElementById("calendar");
@@ -114,6 +199,8 @@
     let displayedYear = new Date().getFullYear();
     let displayedMonth = new Date().getMonth();
     let events = [];
+    let signedInUser = null;
+    let selectedEventId = null;
     const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
     function dateKey(year, month, day) {
@@ -189,6 +276,16 @@
         for (const event of events.filter(item => item.dateKey === key)) {
           const item = document.createElement("article");
           item.className = "event";
+          item.setAttribute("role", "button");
+          item.tabIndex = 0;
+          item.setAttribute("aria-label", `${event.title}, ${eventTime(event) || "time not specified"}. Tap for details.`);
+          item.addEventListener("click", () => openEventDetails(event.id));
+          item.addEventListener("keydown", keyEvent => {
+            if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+              keyEvent.preventDefault();
+              openEventDetails(event.id);
+            }
+          });
           const title = document.createElement("h3");
           title.className = "event-title";
           title.textContent = event.title;
@@ -206,6 +303,14 @@
             description.textContent = event.description;
             item.appendChild(description);
           }
+          if (event.registrations) {
+            const paidCount = event.registrations.filter(person => person.staffType === "paid").length;
+            const volunteerCount = event.registrations.length - paidCount;
+            const rosterSummary = document.createElement("p");
+            rosterSummary.className = "event-time";
+            rosterSummary.textContent = `Working: ${paidCount} paid · ${volunteerCount} volunteer`;
+            item.appendChild(rosterSummary);
+          }
           cell.appendChild(item);
         }
         calendarElement.appendChild(cell);
@@ -217,6 +322,7 @@
       statusElement.textContent = "Updating calendar…";
       try {
         const response = await fetch(API_BASE + "/api/display-calendar", {
+          credentials: "include",
           headers: { "Accept": "application/json" },
           cache: "no-store"
         });
@@ -230,17 +336,162 @@
           throw new Error(result.error || "Unable to load the calendar.");
         }
         events = Array.isArray(result.events) ? result.events : [];
+        signedInUser = result.authenticated ? result.user : null;
+        updateStaffControls();
         renderCalendar();
         const count = events.filter(event => {
           const [year, month] = (event.dateKey || "").split("-").map(Number);
           return year === displayedYear && month === displayedMonth + 1;
         }).length;
         statusElement.textContent = `${count} event${count === 1 ? "" : "s"} this month · updates automatically`;
+        if (selectedEventId && document.getElementById("eventDialog").open) {
+          openEventDetails(selectedEventId);
+        }
       } catch (error) {
         statusElement.className = "error";
         statusElement.textContent = error.message;
       }
     }
+
+    function updateStaffControls() {
+      const accessButton = document.getElementById("staffAccessButton");
+      const identity = document.getElementById("staffIdentity");
+      identity.hidden = !signedInUser;
+      identity.textContent = signedInUser
+        ? `Signed in: ${signedInUser.name || signedInUser.username}`
+        : "";
+      accessButton.textContent = signedInUser ? "Staff Account" : "Staff Sign In";
+    }
+
+    function openEventDetails(eventId) {
+      const event = events.find(item => item.id === eventId);
+      if (!event) return;
+      selectedEventId = eventId;
+      document.getElementById("detailTitle").textContent = event.title;
+      const date = new Date(`${event.dateKey}T12:00:00`);
+      const dateText = Number.isNaN(date.getTime())
+        ? event.dateKey
+        : date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+      const time = eventTime(event);
+      document.getElementById("detailTime").textContent = [dateText, time].filter(Boolean).join(" · ");
+      const description = document.getElementById("detailDescription");
+      description.textContent = event.description || "No description provided.";
+
+      const roster = document.getElementById("rosterSection");
+      roster.replaceChildren();
+      const heading = document.createElement("h3");
+      heading.textContent = "Who's working";
+      roster.appendChild(heading);
+      if (!signedInUser) {
+        const note = document.createElement("p");
+        note.className = "roster-note";
+        note.textContent = "Sign in with an approved staff account to see the paid staff and volunteer roster.";
+        const signIn = document.createElement("button");
+        signIn.type = "button";
+        signIn.className = "primary-action";
+        signIn.textContent = "Staff Sign In to View Names";
+        signIn.addEventListener("click", () => document.getElementById("staffDialog").showModal());
+        roster.append(note, signIn);
+      } else {
+        const attendees = Array.isArray(event.registrations) ? event.registrations : [];
+        const paid = attendees.filter(person => person.staffType === "paid");
+        const volunteers = attendees.filter(person => person.staffType === "volunteer");
+        appendRosterGroup(roster, `Paid staff (${paid.length}/${event.paidStaffCount || 0})`, paid);
+        appendRosterGroup(roster, `Volunteers (${volunteers.length})`, volunteers);
+      }
+      const dialog = document.getElementById("eventDialog");
+      if (!dialog.open) dialog.showModal();
+    }
+
+    function appendRosterGroup(container, label, members) {
+      const group = document.createElement("div");
+      group.className = "roster-group";
+      const heading = document.createElement("h4");
+      heading.textContent = label;
+      const names = document.createElement("p");
+      names.textContent = members.length
+        ? members.map(person => person.name || "Staff member").join("\n")
+        : "None";
+      group.append(heading, names);
+      container.appendChild(group);
+    }
+
+    document.querySelectorAll("[data-close-dialog]").forEach(button => {
+      button.addEventListener("click", () => {
+        document.getElementById(button.dataset.closeDialog).close();
+      });
+    });
+    for (const dialog of document.querySelectorAll("dialog")) {
+      dialog.addEventListener("click", event => {
+        if (event.target === dialog) dialog.close();
+      });
+    }
+    document.getElementById("staffAccessButton").addEventListener("click", () => {
+      document.getElementById("loginMessage").textContent = "";
+      document.getElementById("staffSignOutButton").hidden = !signedInUser;
+      document.getElementById("staffLoginButton").hidden = Boolean(signedInUser);
+      document.getElementById("staffUsername").disabled = Boolean(signedInUser);
+      document.getElementById("staffPassword").disabled = Boolean(signedInUser);
+      document.getElementById("staffDialogTitle").textContent = signedInUser ? "Staff Account" : "Staff Sign In";
+      document.getElementById("staffDialog").showModal();
+    });
+    document.getElementById("staffLoginForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const button = document.getElementById("staffLoginButton");
+      const message = document.getElementById("loginMessage");
+      button.disabled = true;
+      button.textContent = "Signing In…";
+      message.textContent = "";
+      try {
+        const response = await fetch(API_BASE + "/api/login", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("staffUsername").value.trim().toLowerCase(),
+            password: document.getElementById("staffPassword").value
+          })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          message.textContent = result.message || "Unable to sign in.";
+          return;
+        }
+        document.getElementById("staffPassword").value = "";
+        await loadCalendar();
+        document.getElementById("staffDialog").close();
+        if (selectedEventId) openEventDetails(selectedEventId);
+      } catch {
+        message.textContent = "Could not contact the portal API. Check the network and try again.";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Sign In";
+      }
+    });
+    document.getElementById("staffSignOutButton").addEventListener("click", async () => {
+      const button = document.getElementById("staffSignOutButton");
+      button.disabled = true;
+      try {
+        const response = await fetch(API_BASE + "/api/session", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ action: "logout" })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          document.getElementById("loginMessage").textContent = result.message || "Unable to sign out.";
+          return;
+        }
+        document.getElementById("staffDialog").close();
+        await loadCalendar();
+        if (selectedEventId) openEventDetails(selectedEventId);
+      } catch {
+        document.getElementById("loginMessage").textContent = "Could not contact the portal API. Try again.";
+      } finally {
+        button.disabled = false;
+      }
+    });
 
     document.getElementById("previousMonth").addEventListener("click", () => {
       displayedMonth--;

@@ -6,11 +6,11 @@
 ## Calendar display screen
 
 Open `https://portal.maidenrescuesquad.org/display.html` on the screen or
-computer that will show the calendar. This public, read-only monthly view shows
-portal event titles, times, and descriptions without staff sign-in controls or
-signup rosters. It refreshes automatically every minute. Since it is public,
-only put information in event descriptions that is appropriate for anyone to
-view.
+computer that will show the calendar. This read-only monthly view shows portal
+event titles, times, and descriptions. Tap an event to open its details. Event
+rosters are only returned by the API after an approved staff member signs in;
+the display includes sign-out controls for shared screens. The event display
+refreshes automatically every minute.
 
 ## Favicon
 
