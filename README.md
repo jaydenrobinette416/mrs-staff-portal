@@ -17,7 +17,35 @@ calendar; approved staff can sign up, withdraw, and view attendee lists. Signup
 capacity and registrations are stored in the `eventSettings` and `registrations`
 collections. Event paid staff slots are filled by signup order; additional
 registrations are labeled as volunteers. The overall registration limit remains
-an independent cap. No Google Calendar connection is used.
+an independent cap.
+
+### Google Calendar sync
+
+Portal events are mirrored to the Google Calendar configured in
+`google-calendar-bridge.gs`. Event edits, signups, withdrawals, paid-slot
+changes, admin attendee changes, and event deletions are synchronized. The
+event description includes separate paid-staff and volunteer name lists, so
+anyone who can view the Google Calendar events can see the roster.
+
+To enable syncing:
+
+1. Create a Google Apps Script project and copy in `google-calendar-bridge.gs`.
+2. In **Project Settings → Script Properties**, add `BRIDGE_SECRET` with a
+   unique random secret. Use the same secret as the
+   `GOOGLE_CALENDAR_BRIDGE_SECRET` Vercel environment variable; do not commit it.
+3. Set the Apps Script project time zone to `America/New_York`.
+4. Select and run `authorizeCalendarAccess` once in the Apps Script editor, and
+   authorize Calendar access. Make sure the Google account running the script
+   can edit the target calendar.
+5. Deploy as a **Web app**, executing as your account. Set access to **Anyone**
+   so the portal API can call it; the shared secret protects the endpoint.
+6. Add the deployed `/exec` URL to Vercel as `GOOGLE_CALENDAR_BRIDGE_URL`, and
+   add `GOOGLE_CALENDAR_BRIDGE_SECRET` with the same secret. Redeploy the API.
+
+The bridge is set to the calendar ID supplied for this portal. Sync failures
+are queued and retried on later calendar API requests; the portal reports when
+an update is pending. Existing portal events are also queued for an initial
+sync after the bridge is configured.
 
 ## Staff resources
 

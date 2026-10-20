@@ -281,6 +281,9 @@
       calendarEvents = Array.isArray(result.events) ? result.events : [];
       status.textContent = `${calendarEvents.length} event${calendarEvents.length === 1 ? "" : "s"} found.`;
       renderCalendarEvents();
+      if (result.googleSyncPending) {
+        notice("eventNotice", "Google Calendar updates are waiting to sync and will retry automatically.");
+      }
     } catch (error) {
       calendarEvents = [];
       $("eventList").replaceChildren();
@@ -336,7 +339,11 @@
         eventId: event.id
       });
       await loadCalendarEvents();
-      notice("eventNotice", result.message || "Event deleted.", "success");
+      notice(
+        "eventNotice",
+        result.message || "Event deleted.",
+        result.googleSync?.configured && result.googleSync.synced ? "success" : ""
+      );
     } catch (error) {
       notice("eventNotice", error.message, "error");
       button.disabled = false;
@@ -383,7 +390,11 @@
       const result = await calendarRequest("POST", payload);
       closeEventEditor();
       await loadCalendarEvents();
-      notice("eventNotice", result.message || (isEditing ? "Event updated." : "Event created."), "success");
+      notice(
+        "eventNotice",
+        result.message || (isEditing ? "Event updated." : "Event created."),
+        result.googleSync?.configured && result.googleSync.synced ? "success" : ""
+      );
     } catch (error) {
       notice("eventNotice", error.message, "error");
     } finally {

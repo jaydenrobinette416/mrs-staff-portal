@@ -1193,6 +1193,12 @@
           ? `${calendarEvents.length} event${calendarEvents.length === 1 ? "" : "s"} loaded.`
           : "No events have been added to the calendar yet.";
         $("calendarGrid").classList.remove("hidden");
+        if (data.googleSyncPending) {
+          showCalendarNotice("Google Calendar updates are waiting to sync and will retry automatically.");
+        } else if ($("calendarNotice").textContent.startsWith("Google Calendar updates are waiting to sync")) {
+          $("calendarNotice").textContent = "";
+          $("calendarNotice").className = "notice hidden";
+        }
       } catch (error) {
         status.textContent = "Calendar could not load: " + error.message;
         $("calendarGrid").classList.add("hidden");
@@ -1352,10 +1358,13 @@
       if (isEditing) payload.eventId = editingCalendarEventId;
 
       try {
-        await calendarRequest("POST", payload);
+        const result = await calendarRequest("POST", payload);
         closeEventEditor();
         closeEventViewer();
-        showCalendarNotice(isEditing ? "Event updated." : "Event created.", "success");
+        showCalendarNotice(
+          result.message || (isEditing ? "Event updated." : "Event created."),
+          result.googleSync?.configured && result.googleSync.synced ? "success" : ""
+        );
         await loadCalendar();
       } catch (error) {
         showCalendarNotice(error.message, "error");
@@ -1475,9 +1484,12 @@
           if (!window.confirm("Delete this event and all of its registrations? This cannot be undone.")) return;
           deleteEvent.disabled = true;
           try {
-            await calendarRequest("POST", {action:"deleteEvent", eventId:event.id});
+            const result = await calendarRequest("POST", {action:"deleteEvent", eventId:event.id});
             closeEventViewer();
-            showCalendarNotice("Event and its registrations deleted.", "success");
+            showCalendarNotice(
+              result.message || "Event and its registrations deleted.",
+              result.googleSync?.configured && result.googleSync.synced ? "success" : ""
+            );
             await loadCalendar();
           } catch (error) {
             showCalendarNotice(error.message, "error");
@@ -1504,9 +1516,12 @@
           }
           saveCapacity.disabled = true;
           try {
-            await calendarRequest("POST", {action:"setCapacity", eventId:event.id, capacity});
+            const result = await calendarRequest("POST", {action:"setCapacity", eventId:event.id, capacity});
             closeEventViewer();
-            showCalendarNotice("Registration limit updated.", "success");
+            showCalendarNotice(
+              result.message || "Registration limit updated.",
+              result.googleSync?.configured && result.googleSync.synced ? "success" : ""
+            );
             await loadCalendar();
           } catch (error) { showCalendarNotice(error.message, "error"); }
           finally { saveCapacity.disabled = false; }
@@ -1522,9 +1537,12 @@
     async function changeRegistration(eventId, action, button) {
       button.disabled = true;
       try {
-        await calendarRequest("POST", {action, eventId});
+        const result = await calendarRequest("POST", {action, eventId});
         closeEventViewer();
-        showCalendarNotice(action === "signup" ? "You are registered for this event." : "You have withdrawn from this event.", "success");
+        showCalendarNotice(
+          result.message || (action === "signup" ? "You are registered for this event." : "You have withdrawn from this event."),
+          result.googleSync?.configured && result.googleSync.synced ? "success" : ""
+        );
         await loadCalendar();
       } catch (error) {
         showCalendarNotice(error.message, "error");

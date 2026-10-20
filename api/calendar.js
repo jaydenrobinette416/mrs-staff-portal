@@ -2,6 +2,7 @@
 const { MongoClient, ObjectId } = require("mongodb");
 const crypto = require("crypto");
 const { setCorsHeaders } = require("./_cors");
+const { sendGoogleCalendarRequest } = require("./_googleCalendar");
 
 const SESSION_COOKIE = "mrs_session";
 
@@ -230,6 +231,11 @@ async function ensureIndexes(db) {
   );
 
   await db.collection("calendarEvents").createIndex({ dateKey: 1 });
+  await db.collection("googleCalendarSyncQueue").createIndex(
+    { eventId: 1 },
+    { unique: true, name: "one_google_sync_job_per_event" }
+  );
+  await db.collection("googleCalendarSyncQueue").createIndex({ nextAttemptAt: 1 });
 }
 
 async function ensureEventSettings(db, eventId) {
@@ -423,6 +429,157 @@ async function getEventRoster(db, eventId) {
   return formatEventRoster(eventId, settings, registrations);
 }
 
+async function processGoogleCalendarSync(db, eventId = null) {
+  if (
+    !process.env.GOOGLE_CALENDAR_BRIDGE_URL ||
+    !process.env.GOOGLE_CALENDAR_BRIDGE_SECRET
+  ) {
+    return { configured: false, synced: false };
+  }
+
+  const queue = db.collection("googleCalendarSyncQueue");
+  const query = eventId
+    ? { eventId }
+    : { nextAttemptAt: { $lte: new Date() } };
+  const jobs = await queue.find(query)
+    .sort({ nextAttemptAt: 1, updatedAt: 1 })
+    .limit(eventId ? 1 : 5)
+    .toArray();
+  let requestedResult = { configured: true, synced: true };
+
+  for (const job of jobs) {
+    try {
+      const event = job.action === "delete"
+        ? null
+        : await db.collection("calendarEvents").findOne({ id: job.eventId });
+      const action = job.action === "delete" || !event ? "delete" : "upsert";
+      const payload = { action, eventId: job.eventId };
+
+      if (event) {
+        const registration = await getEventRoster(db, job.eventId);
+        payload.event = {
+          title: event.title,
+          dateKey: event.dateKey,
+          location: event.location,
+          description: event.description,
+          allDay: event.allDay,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          registration
+        };
+      }
+
+      await sendGoogleCalendarRequest(payload);
+      if (event) {
+        await db.collection("calendarEvents").updateOne(
+          { id: job.eventId },
+          {
+            $set: { googleCalendarSyncedAt: new Date() },
+            $unset: { googleCalendarSyncError: "" }
+          }
+        );
+      }
+      await queue.deleteOne({ _id: job._id, updatedAt: job.updatedAt });
+      if (eventId === job.eventId) {
+        requestedResult = { configured: true, synced: true };
+      }
+    } catch (error) {
+      const attempts = (job.attempts || 0) + 1;
+      const retryDelay = Math.min(30000 * (2 ** Math.min(attempts - 1, 5)), 15 * 60 * 1000);
+      await queue.updateOne(
+        { _id: job._id, updatedAt: job.updatedAt },
+        {
+          $set: {
+            attempts,
+            lastError: error.message,
+            nextAttemptAt: new Date(Date.now() + retryDelay)
+          }
+        }
+      );
+      await db.collection("calendarEvents").updateOne(
+        { id: job.eventId },
+        { $set: { googleCalendarSyncError: error.message } }
+      );
+      console.error("Google Calendar sync failed:", error.message);
+      if (eventId === job.eventId) {
+        requestedResult = { configured: true, synced: false };
+      }
+    }
+  }
+  return requestedResult;
+}
+
+async function queueGoogleCalendarSync(db, eventId, action = "upsert") {
+  if (
+    !process.env.GOOGLE_CALENDAR_BRIDGE_URL ||
+    !process.env.GOOGLE_CALENDAR_BRIDGE_SECRET
+  ) {
+    return { configured: false, synced: false };
+  }
+
+  const now = new Date();
+  await db.collection("googleCalendarSyncQueue").updateOne(
+    { eventId },
+    {
+      $set: {
+        eventId,
+        action,
+        updatedAt: now,
+        nextAttemptAt: now,
+        attempts: 0
+      }
+    },
+    { upsert: true }
+  );
+  return processGoogleCalendarSync(db, eventId);
+}
+
+async function enqueueUnsyncedGoogleEvents(db) {
+  if (
+    !process.env.GOOGLE_CALENDAR_BRIDGE_URL ||
+    !process.env.GOOGLE_CALENDAR_BRIDGE_SECRET
+  ) {
+    return;
+  }
+
+  const candidates = await db.collection("calendarEvents")
+    .find({
+      $or: [
+        { googleCalendarSyncedAt: { $exists: false } },
+        { $expr: { $lt: ["$googleCalendarSyncedAt", "$updatedAt"] } }
+      ]
+    })
+    .sort({ updatedAt: -1 })
+    .limit(10)
+    .toArray();
+  const now = new Date();
+  for (const event of candidates) {
+    await db.collection("googleCalendarSyncQueue").updateOne(
+      { eventId: event.id },
+      {
+        $setOnInsert: {
+          eventId: event.id,
+          action: "upsert",
+          updatedAt: now,
+          nextAttemptAt: now,
+          attempts: 0
+        }
+      },
+      { upsert: true }
+    );
+  }
+}
+
+function googleSyncMessage(actionMessage, syncResult) {
+  if (!syncResult.configured) {
+    return `${actionMessage} Google Calendar sync is not configured yet.`;
+  }
+  if (!syncResult.synced) {
+    return `${actionMessage} Google Calendar is temporarily unavailable; this update will retry automatically.`;
+  }
+  return `${actionMessage} Google Calendar was updated.`;
+}
+
 async function getCalendarEvents(db) {
   const storedEvents = await db.collection("calendarEvents")
     .find({})
@@ -530,7 +687,14 @@ module.exports = async function handler(req, res) {
     await ensureIndexes(db);
 
     if (req.method === "GET") {
+      await enqueueUnsyncedGoogleEvents(db);
+      await processGoogleCalendarSync(db);
       const events = await getCalendarEvents(db);
+      const googleSyncPending = Boolean(
+        process.env.GOOGLE_CALENDAR_BRIDGE_URL &&
+        process.env.GOOGLE_CALENDAR_BRIDGE_SECRET &&
+        await db.collection("googleCalendarSyncQueue").countDocuments({})
+      );
 
       const myRegistrations = await db.collection("registrations")
         .find({ userId: user._id.toString() })
@@ -543,6 +707,7 @@ module.exports = async function handler(req, res) {
 
       return res.status(200).json({
         ok: true,
+        googleSyncPending,
 
         events: events.map(event => ({
           ...event,
@@ -621,9 +786,11 @@ module.exports = async function handler(req, res) {
         }
       );
 
+      const googleSync = await queueGoogleCalendarSync(db, id);
       return res.status(201).json({
         ok: true,
-        message: "Event created.",
+        message: googleSyncMessage("Event created.", googleSync),
+        googleSync,
         eventId: id
       });
     }
@@ -717,9 +884,11 @@ module.exports = async function handler(req, res) {
         );
       }
 
+      const googleSync = await queueGoogleCalendarSync(db, eventId);
       return res.status(200).json({
         ok: true,
-        message: "Event updated."
+        message: googleSyncMessage("Event updated.", googleSync),
+        googleSync
       });
     }
 
@@ -759,9 +928,11 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      const googleSync = await queueGoogleCalendarSync(db, eventId, "delete");
       return res.status(200).json({
         ok: true,
-        message: "Event and its registrations deleted."
+        message: googleSyncMessage("Event and its registrations deleted.", googleSync),
+        googleSync
       });
     }
 
@@ -804,9 +975,11 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      const googleSync = await queueGoogleCalendarSync(db, eventId);
       return res.status(200).json({
         ok: true,
-        message: "You have signed up for this event.",
+        message: googleSyncMessage("You have signed up for this event.", googleSync),
+        googleSync,
         registration: await getEventRoster(db, eventId)
       });
     }
@@ -818,12 +991,15 @@ module.exports = async function handler(req, res) {
         user._id.toString()
       );
 
+      const googleSync = removed
+        ? await queueGoogleCalendarSync(db, eventId)
+        : null;
       return res.status(200).json({
         ok: true,
-
         message: removed
-          ? "You have withdrawn from this event."
+          ? googleSyncMessage("You have withdrawn from this event.", googleSync)
           : "You were not registered for this event.",
+        googleSync,
 
         registration: await getEventRoster(db, eventId)
       });
@@ -872,8 +1048,11 @@ module.exports = async function handler(req, res) {
         }
       );
 
+      const googleSync = await queueGoogleCalendarSync(db, eventId);
       return res.status(200).json({
         ok: true,
+        message: googleSyncMessage("Registration capacity updated.", googleSync),
+        googleSync,
         registration: await getEventRoster(db, eventId)
       });
     }
@@ -899,8 +1078,11 @@ module.exports = async function handler(req, res) {
         }
       );
 
+      const googleSync = await queueGoogleCalendarSync(db, eventId);
       return res.status(200).json({
         ok: true,
+        message: googleSyncMessage("Paid staff slots updated.", googleSync),
+        googleSync,
         registration: await getEventRoster(db, eventId)
       });
     }
@@ -957,8 +1139,11 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      const googleSync = await queueGoogleCalendarSync(db, eventId);
       return res.status(200).json({
         ok: true,
+        message: googleSyncMessage("Staff member added to the event.", googleSync),
+        googleSync,
         registration: await getEventRoster(db, eventId)
       });
     }
@@ -980,9 +1165,16 @@ module.exports = async function handler(req, res) {
         body.userId
       );
 
+      const googleSync = removed
+        ? await queueGoogleCalendarSync(db, eventId)
+        : null;
       return res.status(200).json({
         ok: true,
         removed,
+        message: removed
+          ? googleSyncMessage("Staff member removed from the event.", googleSync)
+          : "Staff member was not registered.",
+        googleSync,
         registration: await getEventRoster(db, eventId)
       });
     }
