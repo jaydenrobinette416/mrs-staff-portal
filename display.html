@@ -202,6 +202,11 @@
       return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
 
+    function displayBaseName(value) {
+      const base = String(value || "").trim();
+      return !base || /^Base(?:\s*2)?$/i.test(base) ? "93" : base;
+    }
+
     function formatTime(value) {
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value || "")) return "";
       const [hour, minute] = value.split(":").map(Number);
@@ -280,8 +285,9 @@
             const staffName = signedInUser
               ? (shift.employee || "Unassigned")
               : "Staff sign-in required";
-            assignment.textContent = `${staffName} · ${shift.base || "93:"} · ${dayNight}`;
-            assignment.setAttribute("aria-label", `${staffName}, ${shift.base || "93:"}, ${dayNight}. Tap for details.`);
+            const base = displayBaseName(shift.base);
+            assignment.textContent = `${staffName} · ${base} · ${dayNight}`;
+            assignment.setAttribute("aria-label", `${staffName}, ${base}, ${dayNight}. Tap for details.`);
             assignment.addEventListener("click", () => openBaseDetails(shift));
             baseSection.appendChild(assignment);
           }
@@ -449,7 +455,7 @@
     function openBaseDetails(shift) {
       selectedEventId = null;
       selectedBaseShift = shift;
-      document.getElementById("detailTitle").textContent = shift.base || "Base staffing";
+      document.getElementById("detailTitle").textContent = displayBaseName(shift.base);
       const date = new Date(`${shift.date}T12:00:00`);
       const dateText = Number.isNaN(date.getTime())
         ? shift.date

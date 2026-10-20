@@ -74,8 +74,8 @@ function text(value, fallback = "") {
 }
 
 function displayBaseName(shift) {
-  const base = text(shift.base || shift.station || shift.location, "93:");
-  return base.replace(/\bBase(?:\s*2)?\b:?/gi, "93:");
+  const base = text(shift.base || shift.station || shift.location);
+  return !base || /^Base(?:\s*2)?$/i.test(base) ? "93" : base;
 }
 
 module.exports = async function handler(req, res) {
