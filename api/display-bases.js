@@ -73,6 +73,11 @@ function text(value, fallback = "") {
     : fallback;
 }
 
+function displayBaseName(shift) {
+  const base = text(shift.base || shift.station || shift.location, "Base");
+  return base.replace(/\bBase\s*2\b/gi, "93");
+}
+
 module.exports = async function handler(req, res) {
   const originAllowed = setCorsHeaders(req, res, "GET, OPTIONS");
   res.setHeader("Cache-Control", "no-store");
@@ -139,7 +144,7 @@ module.exports = async function handler(req, res) {
         date: text(shift.date),
         shift: text(shift.shift),
         time: text(shift.time),
-        base: text(shift.base || shift.station || shift.location, "Base"),
+        base: displayBaseName(shift),
         employee: user ? text(shift.employee, shift.unassigned ? "Unassigned" : "") : "",
         unassigned: shift.unassigned === true || shift.employee === "(Unassigned)"
       }))
