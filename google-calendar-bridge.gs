@@ -93,7 +93,10 @@ function doPost(e) {
     return jsonResponse({ ok: true });
   } catch (error) {
     console.error("Google Calendar bridge error: " + error.message);
-    return jsonResponse({ ok: false, error: "Unable to update Google Calendar." });
+    return jsonResponse({
+      ok: false,
+      error: String(error.message || "Unable to update Google Calendar.").slice(0, 300)
+    });
   }
 }
 

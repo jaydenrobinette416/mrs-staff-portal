@@ -1194,7 +1194,11 @@
           : "No events have been added to the calendar yet.";
         $("calendarGrid").classList.remove("hidden");
         if (data.googleSyncPending) {
-          showCalendarNotice("Google Calendar updates are waiting to sync and will retry automatically.");
+          const latestIssue = Array.isArray(data.googleSyncIssues) ? data.googleSyncIssues[0] : null;
+          const issueText = latestIssue
+            ? ` Latest error: ${latestIssue.error} (attempt ${latestIssue.attempts}).`
+            : "";
+          showCalendarNotice("Google Calendar updates are waiting to sync and will retry automatically." + issueText, "error");
         } else if ($("calendarNotice").textContent.startsWith("Google Calendar updates are waiting to sync")) {
           $("calendarNotice").textContent = "";
           $("calendarNotice").className = "notice hidden";

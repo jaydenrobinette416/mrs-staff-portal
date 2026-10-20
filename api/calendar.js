@@ -695,6 +695,14 @@ module.exports = async function handler(req, res) {
         process.env.GOOGLE_CALENDAR_BRIDGE_SECRET &&
         await db.collection("googleCalendarSyncQueue").countDocuments({})
       );
+      const googleSyncIssues = isAdmin(user)
+        ? await db.collection("googleCalendarSyncQueue")
+          .find({ lastError: { $exists: true } })
+          .sort({ nextAttemptAt: -1 })
+          .limit(5)
+          .project({ eventId: 1, lastError: 1, attempts: 1 })
+          .toArray()
+        : [];
 
       const myRegistrations = await db.collection("registrations")
         .find({ userId: user._id.toString() })
@@ -708,6 +716,11 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         ok: true,
         googleSyncPending,
+        googleSyncIssues: googleSyncIssues.map(issue => ({
+          eventId: issue.eventId,
+          error: String(issue.lastError || "No error details were recorded.").slice(0, 300),
+          attempts: issue.attempts || 0
+        })),
 
         events: events.map(event => ({
           ...event,

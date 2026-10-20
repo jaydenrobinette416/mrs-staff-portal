@@ -282,7 +282,11 @@
       status.textContent = `${calendarEvents.length} event${calendarEvents.length === 1 ? "" : "s"} found.`;
       renderCalendarEvents();
       if (result.googleSyncPending) {
-        notice("eventNotice", "Google Calendar updates are waiting to sync and will retry automatically.");
+        const latestIssue = Array.isArray(result.googleSyncIssues) ? result.googleSyncIssues[0] : null;
+        const issueText = latestIssue
+          ? ` Latest error: ${latestIssue.error} (attempt ${latestIssue.attempts}).`
+          : "";
+        notice("eventNotice", "Google Calendar updates are waiting to sync and will retry automatically." + issueText, "error");
       }
     } catch (error) {
       calendarEvents = [];

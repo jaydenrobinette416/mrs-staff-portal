@@ -29,7 +29,10 @@ async function sendGoogleCalendarRequest(payload) {
     try {
       result = JSON.parse(text);
     } catch {
-      throw new Error("Google Calendar bridge returned an unexpected response.");
+      const contentType = response.headers.get("content-type") || "unknown content type";
+      throw new Error(
+        `Google Calendar bridge returned HTTP ${response.status} with ${contentType}; verify the deployed /exec URL and web app access setting.`
+      );
     }
     if (!response.ok || !result.ok) {
       throw new Error(result.error || "Google Calendar bridge rejected the update.");
