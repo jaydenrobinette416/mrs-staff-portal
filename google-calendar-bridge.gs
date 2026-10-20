@@ -12,10 +12,17 @@ function authorizeCalendarAccess() {
 function doPost(e) {
   try {
     const request = JSON.parse(e.postData.contents);
-    const configuredSecret = PropertiesService.getScriptProperties()
-      .getProperty("BRIDGE_SECRET");
-    if (!configuredSecret || request.secret !== configuredSecret) {
-      return jsonResponse({ ok: false, error: "Unauthorized." });
+    const configuredSecret = String(
+      PropertiesService.getScriptProperties().getProperty("BRIDGE_SECRET") || ""
+    ).trim();
+    const suppliedSecret = typeof request.secret === "string"
+      ? request.secret.trim()
+      : "";
+    if (!configuredSecret || suppliedSecret !== configuredSecret) {
+      return jsonResponse({
+        ok: false,
+        error: "Bridge secret is missing or does not match. Set Script Property BRIDGE_SECRET and Vercel GOOGLE_CALENDAR_BRIDGE_SECRET to the same value."
+      });
     }
 
     const calendar = CalendarApp.getCalendarById(CALENDAR_ID);
@@ -56,13 +63,14 @@ function doPost(e) {
     const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
     let googleEvent = googleEventId ? calendar.getEventById(googleEventId) : null;
     const description = formatDescription(details);
+    const previewTitle = formatPreviewTitle(details.title, details.registration);
 
     if (details.allDay) {
       if (!googleEvent) {
-        googleEvent = calendar.createAllDayEvent(details.title, date);
+        googleEvent = calendar.createAllDayEvent(previewTitle, date);
       } else {
         googleEvent.setAllDayDate(date);
-        googleEvent.setTitle(details.title);
+        googleEvent.setTitle(previewTitle);
       }
     } else {
       if (
@@ -79,10 +87,10 @@ function doPost(e) {
         return jsonResponse({ ok: false, error: "Event end time must follow its start time." });
       }
       if (!googleEvent) {
-        googleEvent = calendar.createEvent(details.title, start, end);
+        googleEvent = calendar.createEvent(previewTitle, start, end);
       } else {
         googleEvent.setTime(start, end);
-        googleEvent.setTitle(details.title);
+        googleEvent.setTitle(previewTitle);
       }
     }
 
@@ -127,6 +135,34 @@ function formatDescription(event) {
       (volunteers.length ? volunteers.map(person => "- " + person.name).join("\n") : "- None")
   );
   return sections.join("\n\n");
+}
+
+function formatPreviewTitle(title, registration) {
+  const attendees = Array.isArray(registration?.registrations)
+    ? registration.registrations
+    : [];
+  if (!attendees.length) return title;
+
+  const paidNames = attendees
+    .filter(person => person.staffType === "paid")
+    .map(person => person.name || person.username || "Staff member");
+  const volunteerNames = attendees
+    .filter(person => person.staffType === "volunteer")
+    .map(person => person.name || person.username || "Staff member");
+  const groups = [];
+  if (paidNames.length) groups.push("Paid: " + paidNames.join(", "));
+  if (volunteerNames.length) groups.push("Volunteers: " + volunteerNames.join(", "));
+
+  const suffix = " — " + groups.join(" | ");
+  const maximumTitleLength = 500;
+  if (title.length + suffix.length <= maximumTitleLength) {
+    return title + suffix;
+  }
+
+  const tail = " … (full roster in description)";
+  const availableLength = Math.max(0, maximumTitleLength - title.length - tail.length);
+  const shortenedSuffix = suffix.slice(0, availableLength).replace(/[,\s|—]+$/, "");
+  return title + shortenedSuffix + tail;
 }
 
 function jsonResponse(data) {

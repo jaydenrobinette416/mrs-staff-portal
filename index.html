@@ -1542,12 +1542,20 @@
       button.disabled = true;
       try {
         const result = await calendarRequest("POST", {action, eventId});
+        const event = calendarEvents.find(item => item.id === eventId);
+        if (!event || !result.registration) {
+          throw new Error("The registration was saved, but the updated event roster was not returned. Refresh the calendar to see the latest attendance.");
+        }
+        event.registration = {
+          ...result.registration,
+          signedUp: action === "signup"
+        };
         closeEventViewer();
+        renderCalendar();
         showCalendarNotice(
           result.message || (action === "signup" ? "You are registered for this event." : "You have withdrawn from this event."),
           result.googleSync?.configured && result.googleSync.synced ? "success" : ""
         );
-        await loadCalendar();
       } catch (error) {
         showCalendarNotice(error.message, "error");
       } finally { button.disabled = false; }

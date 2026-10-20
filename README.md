@@ -24,8 +24,9 @@ an independent cap.
 Portal events are mirrored to the Google Calendar configured in
 `google-calendar-bridge.gs`. Event edits, signups, withdrawals, paid-slot
 changes, admin attendee changes, and event deletions are synchronized. The
-event description includes separate paid-staff and volunteer name lists, so
-anyone who can view the Google Calendar events can see the roster.
+Google Calendar event title shows paid and volunteer names in its preview; the
+event description also includes the full separate name lists. Anyone who can
+view the Google Calendar events can see the roster.
 
 To enable syncing:
 
@@ -46,6 +47,13 @@ The bridge is set to the calendar ID supplied for this portal. Sync failures
 are queued and retried on later calendar API requests; the portal reports when
 an update is pending. Existing portal events are also queued for an initial
 sync after the bridge is configured.
+
+If the portal reports **Unauthorized**, the bridge URL is reachable but the
+shared secret was rejected. Confirm the Apps Script property name is exactly
+`BRIDGE_SECRET`, compare its value with Vercel's
+`GOOGLE_CALENDAR_BRIDGE_SECRET` (without quotes), save both, and redeploy the
+Apps Script web app using a new version and redeploy the Vercel API. Do not
+share either secret.
 
 ## Staff resources
 
