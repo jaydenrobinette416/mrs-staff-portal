@@ -3,6 +3,15 @@
 - `index.html` — staff portal, login, and standalone event calendar
 - `api/` — Vercel serverless endpoints for accounts, sessions, calendar registrations, resources, and announcements
 
+## Calendar display screen
+
+Open `https://portal.maidenrescuesquad.org/display.html` on the screen or
+computer that will show the calendar. This public, read-only monthly view shows
+portal event titles, times, and descriptions without staff sign-in controls or
+signup rosters. It refreshes automatically every minute. Since it is public,
+only put information in event descriptions that is appropriate for anyone to
+view.
+
 ## Favicon
 
 Both the staff portal and admin page use `favicon.png` from the project root.
